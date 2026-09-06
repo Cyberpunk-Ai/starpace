@@ -55,7 +55,6 @@ export const ensureMyProfile = createServerFn({ method: "POST" })
 
       // Only a username clash is worth retrying; anything else is fatal.
       if (error && !/profiles_username/i.test(error.message)) {
-        console.error("profile insert failed", error);
         throw new Error(error.message);
       }
     }
