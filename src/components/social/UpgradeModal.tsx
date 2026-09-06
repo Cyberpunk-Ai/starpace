@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import {
   X,
   Sparkles,
@@ -12,7 +13,9 @@ import {
 import { type PlanTier, type BillingCycle, PLAN_DETAILS } from "@/lib/plans";
 import { usePlan } from "@/lib/plan-state";
 import { useAuth } from "@/lib/auth-state";
+import { startPaystackCheckout } from "@/lib/paystack.functions";
 import { cn } from "@/lib/utils";
+
 
 export function UpgradeModal() {
   const { currentPlan, cycle: defaultCycle, upgradePlan } = usePlan();
@@ -77,24 +80,22 @@ export function UpgradeModal() {
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
+    setCheckoutError(null);
     setIsProcessing(true);
     try {
-      await new Promise((r) => setTimeout(r, 700));
-      await upgradePlan(selectedPlan, cycle, {
-        brand: "Visa",
-        last4: "4242",
-        exp: cardForm.expiry,
-      });
+      const res = (await startCheckout({
+        data: { plan: selectedPlan, cycle, origin: window.location.origin },
+      })) as { authorizationUrl?: string };
+      if (!res?.authorizationUrl) throw new Error("Checkout could not be started.");
+      window.location.href = res.authorizationUrl;
+    } catch (err) {
       setIsProcessing(false);
-      setIsSuccess(true);
-      setTimeout(() => {
-        setIsSuccess(false);
-        setIsOpen(false);
-      }, 1800);
-    } catch {
-      setIsProcessing(false);
+      setCheckoutError(
+        err instanceof Error ? err.message : "We couldn't start checkout. Please try again.",
+      );
     }
   };
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-200">
@@ -276,65 +277,24 @@ export function UpgradeModal() {
               </div>
               {promoError && <p className="text-[0.7rem] text-rose-500">{promoError}</p>}
 
-              {/* Payment Details Input */}
-              <div className="rounded-2xl border border-border/60 p-3.5 space-y-3 bg-background">
+              {/* Secure payment notice */}
+              <div className="rounded-2xl border border-border/60 p-3.5 space-y-2 bg-background">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span className="flex items-center gap-1.5 font-semibold text-foreground">
-                    <CreditCard className="h-4 w-4 text-brand" /> Payment Method
+                    <CreditCard className="h-4 w-4 text-brand" /> Secure checkout
                   </span>
                   <span className="flex items-center gap-1 text-[0.7rem]">
-                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" /> 256-bit Encrypted
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" /> Powered by Paystack
                   </span>
                 </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="col-span-3">
-                    <label className="text-[0.65rem] text-muted-foreground uppercase font-bold tracking-wider">Card Number</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="4242 4242 4242 4242"
-                      value={cardForm.cardNumber}
-                      onChange={(e) => setCardForm({ ...cardForm, cardNumber: e.target.value })}
-                      className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-xs font-mono focus:border-brand focus:ring-1 focus:ring-brand focus:outline-none placeholder:text-muted-foreground/60"
-                    />
-                  </div>
-                  <div className="col-span-3">
-                    <label className="text-[0.65rem] text-muted-foreground uppercase font-bold tracking-wider">Cardholder Name</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder={user?.display_name || "Jane Doe"}
-                      value={cardForm.name}
-                      onChange={(e) => setCardForm({ ...cardForm, name: e.target.value })}
-                      className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-xs focus:border-brand focus:ring-1 focus:ring-brand focus:outline-none placeholder:text-muted-foreground/60"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-[0.65rem] text-muted-foreground uppercase font-bold tracking-wider">Expiration Date</label>
-                    <input
-                      type="text"
-                      required
-                      value={cardForm.expiry}
-                      onChange={(e) => setCardForm({ ...cardForm, expiry: e.target.value })}
-                      className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-xs font-mono focus:border-brand focus:ring-1 focus:ring-brand focus:outline-none placeholder:text-muted-foreground/60"
-                      placeholder="MM/YY"
-                    />
-                  </div>
-                  <div className="col-span-1">
-                    <label className="text-[0.65rem] text-muted-foreground uppercase font-bold tracking-wider">CVC</label>
-                    <input
-                      type="text"
-                      required
-                      maxLength={4}
-                      value={cardForm.cvc}
-                      onChange={(e) => setCardForm({ ...cardForm, cvc: e.target.value })}
-                      className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-xs text-center font-mono focus:border-brand focus:ring-1 focus:ring-brand focus:outline-none placeholder:text-muted-foreground/60"
-                      placeholder="123"
-                    />
-                  </div>
-                </div>
+                <p className="text-[0.7rem] leading-relaxed text-muted-foreground">
+                  You'll be taken to Paystack's secure page to pay by card, bank transfer or mobile
+                  money. Your card details never touch this app, and your plan activates the moment
+                  the payment clears.
+                </p>
               </div>
+              {checkoutError && <p className="text-[0.7rem] text-rose-500">{checkoutError}</p>}
+
 
               {/* Price & Summary */}
               <div className="flex items-center justify-between border-t border-border/50 pt-4">
