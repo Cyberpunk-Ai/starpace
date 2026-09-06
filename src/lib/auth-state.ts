@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
+import { ensureMyProfile } from "@/lib/profile.functions";
 import {
   currentUser,
   rowToProfile,
@@ -19,11 +20,27 @@ async function loadSessionProfile() {
     return;
   }
 
-  const { data: row } = await supabase
+  let { data: row } = await supabase
     .from("profiles")
     .select("*")
     .eq("auth_user_id", authUser.id)
     .maybeSingle();
+
+  if (!row) {
+    // First sign-in after confirming an email (or a social login): create the
+    // profile server-side, then read it back.
+    try {
+      await ensureMyProfile({ data: {} });
+      const retry = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("auth_user_id", authUser.id)
+        .maybeSingle();
+      row = retry.data;
+    } catch (err) {
+      console.error("Could not create profile", err);
+    }
+  }
 
   if (row) {
     const profile = rowToProfile(row as Record<string, unknown>);
