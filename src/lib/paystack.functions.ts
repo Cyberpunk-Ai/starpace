@@ -15,10 +15,13 @@ const PRICES: Record<PlanTier, Record<BillingCycle, number>> = {
   pro: { monthly: 3770, annual: 35880 },
 };
 
+/** USD is what we advertise; the merchant account settles in KES. */
+const USD_TO_KES = Number(process.env["PAYSTACK_USD_RATE"] ?? 130);
 
 function money(plan: PlanTier, cycle: BillingCycle) {
   return PRICES[plan][cycle];
 }
+
 
 function paystackKey() {
   const key = process.env["PAYSTACK_SECRET_KEY"];
@@ -100,6 +103,92 @@ export const startPaystackCheckout = createServerFn({ method: "POST" })
     };
   });
 
+/**
+ * Starts a real, paid tip. The tip is only recorded for the creator once
+ * Paystack confirms the charge (callback or webhook).
+ */
+export const startTipCheckout = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      recipientUsername: string;
+      amount: number;
+      message?: string;
+      postId?: string | null;
+      origin: string;
+    }) => {
+      const amount = Number(input.amount);
+      if (!Number.isFinite(amount) || amount < 1 || amount > 1000) {
+        throw new Error("Tip amount must be between $1 and $1000.");
+      }
+      if (!input.recipientUsername) throw new Error("Pick someone to tip.");
+      if (!/^https?:\/\//.test(input.origin)) throw new Error("Invalid origin");
+      return { ...input, amount: Math.round(amount * 100) / 100 };
+    },
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId, claims } = context as any;
+
+    const { data: me } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("auth_user_id", userId)
+      .maybeSingle();
+    if (!me) throw new Error("Complete your profile before sending a tip.");
+
+    const { data: recipient } = await supabase
+      .from("profiles")
+      .select("id, username")
+      .eq("username", data.recipientUsername.replace(/^@/, ""))
+      .maybeSingle();
+    if (!recipient) throw new Error("We couldn't find that person.");
+    if (recipient.id === me.id) throw new Error("You can't tip yourself.");
+
+    const email = claims?.email ?? `${me.id}@users.noreply.app`;
+    const currency = process.env["PAYSTACK_CURRENCY"] || "KES";
+    const amount = Math.round(data.amount * USD_TO_KES) * 100;
+    const reference = `tip_${crypto.randomUUID().replace(/-/g, "")}`;
+
+    const init = await paystack("/transaction/initialize", {
+      method: "POST",
+      body: JSON.stringify({
+        email,
+        amount,
+        currency,
+        reference,
+        callback_url: `${data.origin}/billing/callback`,
+        metadata: {
+          kind: "tip",
+          profile_id: me.id,
+          recipient_id: recipient.id,
+          recipient_username: recipient.username,
+          tip_usd: data.amount,
+          note: (data.message ?? "").slice(0, 240),
+          post_id: data.postId ?? null,
+        },
+      }),
+    });
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await (supabaseAdmin as any).from("payments").insert({
+      user_id: me.id,
+      reference,
+      plan: "tip",
+      billing_cycle: "one_time",
+      amount,
+      currency,
+      email,
+      status: "pending",
+      authorization_url: init.data?.authorization_url ?? null,
+      raw: { recipient_username: recipient.username, tip_usd: data.amount },
+    });
+
+    return {
+      authorizationUrl: init.data?.authorization_url as string,
+      reference,
+    };
+  });
+
 /** Confirms a Paystack reference and activates the plan. Safe to call twice. */
 export const confirmPaystackPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -126,6 +215,7 @@ export const confirmPaystackPayment = createServerFn({ method: "POST" })
     }
 
     const success = tx.status === "success";
+    const isTip = meta.kind === "tip";
     const plan = (meta.plan as PlanTier) ?? "plus";
     const cycle = (meta.billing_cycle as BillingCycle) ?? "monthly";
 
@@ -140,7 +230,41 @@ export const confirmPaystackPayment = createServerFn({ method: "POST" })
       })
       .eq("reference", data.reference);
 
-    if (!success) return { status: tx.status ?? "failed", plan, cycle };
+    if (!success) {
+      return { status: tx.status ?? "failed", kind: isTip ? "tip" : "plan", plan, cycle };
+    }
+
+    if (isTip) {
+      const admin = supabaseAdmin as any;
+      const { data: already } = await admin
+        .from("tips")
+        .select("id")
+        .eq("message", `${meta.note ?? ""}`)
+        .eq("from_user_id", profile.id)
+        .eq("to_user_id", meta.recipient_id)
+        .eq("amount", meta.tip_usd)
+        .limit(1);
+
+      if (!already?.length) {
+        await admin.from("tips").insert({
+          from_user_id: profile.id,
+          to_user_id: meta.recipient_id,
+          amount: meta.tip_usd,
+          message: meta.note ?? "",
+          post_id: meta.post_id ?? null,
+        });
+      }
+
+      return {
+        status: "success" as const,
+        kind: "tip" as const,
+        plan,
+        cycle,
+        recipient: meta.recipient_username as string,
+        amount: Number(meta.tip_usd ?? 0),
+      };
+    }
+
 
     await (supabaseAdmin as any).from("profiles").update({ plan }).eq("id", profile.id);
     await (supabaseAdmin as any).from("subscriptions").upsert(
@@ -165,7 +289,7 @@ export const confirmPaystackPayment = createServerFn({ method: "POST" })
       { onConflict: "user_id" },
     );
 
-    return { status: "success" as const, plan, cycle };
+    return { status: "success" as const, kind: "plan" as const, plan, cycle };
   });
 
 export const listMyPayments = createServerFn({ method: "GET" })

@@ -42,6 +42,27 @@ export const Route = createFileRoute("/api/public/paystack/webhook")({
           const plan = (meta.plan as string) ?? "plus";
           const cycle = (meta.billing_cycle as string) ?? "monthly";
 
+          if (meta.kind === "tip" && profileId && meta.recipient_id) {
+            const { data: existing } = await admin
+              .from("tips")
+              .select("id")
+              .eq("from_user_id", profileId)
+              .eq("to_user_id", meta.recipient_id)
+              .eq("amount", meta.tip_usd)
+              .eq("message", `${meta.note ?? ""}`)
+              .limit(1);
+            if (!existing?.length) {
+              await admin.from("tips").insert({
+                from_user_id: profileId,
+                to_user_id: meta.recipient_id,
+                amount: meta.tip_usd,
+                message: meta.note ?? "",
+                post_id: meta.post_id ?? null,
+              });
+            }
+            return new Response("ok");
+          }
+
           if (profileId) {
             await admin.from("profiles").update({ plan }).eq("id", profileId);
             await admin.from("subscriptions").upsert(
