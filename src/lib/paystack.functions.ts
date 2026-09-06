@@ -289,7 +289,7 @@ export const confirmPaystackPayment = createServerFn({ method: "POST" })
       { onConflict: "user_id" },
     );
 
-    return { status: "success" as const, plan, cycle };
+    return { status: "success" as const, kind: "plan" as const, plan, cycle };
   });
 
 export const listMyPayments = createServerFn({ method: "GET" })
