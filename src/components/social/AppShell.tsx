@@ -27,6 +27,7 @@ import { usePlan, openUpgradeModal } from "@/lib/plan-state";
 import { PLAN_DETAILS } from "@/lib/plans";
 import { useUnreadCounts } from "@/lib/unread-state";
 import { useTheme } from "@/lib/theme-state";
+import { UpgradeModal } from "@/components/social/UpgradeModal";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -364,6 +365,8 @@ export function AppShell({
       >
         <Feather className="h-5 w-5" />
       </Link>
+
+      <UpgradeModal />
 
       {/* mobile bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around px-2 py-2 bg-card/95 backdrop-blur-md border-t border-border/80 lg:hidden shadow-lg">
