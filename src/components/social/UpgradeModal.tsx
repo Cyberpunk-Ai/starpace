@@ -290,8 +290,10 @@ export function UpgradeModal() {
                 <p className="text-[0.7rem] leading-relaxed text-muted-foreground">
                   You'll be taken to Paystack's secure page to pay by card, bank transfer or mobile
                   money. Your card details never touch this app, and your plan activates the moment
-                  the payment clears.
+                  the payment clears. Prices are shown in US dollars and charged as the equivalent
+                  amount in Kenyan Shillings.
                 </p>
+
               </div>
               {checkoutError && <p className="text-[0.7rem] text-rose-500">{checkoutError}</p>}
 
