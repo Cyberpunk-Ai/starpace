@@ -26,21 +26,9 @@ export function UpgradeModal() {
   const [promoError, setPromoError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const startCheckout = useServerFn(startPaystackCheckout);
 
-  // Mock checkout card state (clean placeholders instead of hardcoded dummy card)
-  const [cardForm, setCardForm] = useState({
-    cardNumber: "",
-    expiry: "",
-    cvc: "",
-    name: "",
-  });
-
-  // Sync user display name as default cardholder name when loaded
-  useEffect(() => {
-    if (user && !cardForm.name) {
-      setCardForm((prev) => ({ ...prev, name: user.display_name }));
-    }
-  }, [user]);
 
   useEffect(() => {
     const handleOpen = (e: any) => {
