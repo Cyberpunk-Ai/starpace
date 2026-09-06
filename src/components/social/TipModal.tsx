@@ -122,46 +122,66 @@ export function TipModal({ isOpen, onClose, recipient, postId, spaceId }: TipMod
                 <Sparkles className="h-3.5 w-3.5" /> Total Tips Balance
               </span>
               <div className="flex items-baseline justify-between">
-                <span className="text-3xl font-black tracking-tight text-foreground">$142.50</span>
+                <span className="text-3xl font-black tracking-tight text-foreground">
+                  ${(earnings?.total ?? 0).toFixed(2)}
+                </span>
                 <span className="text-xs font-bold text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full">
                   100% Payout Rate
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground">Directly received from 18 community supporters this month.</p>
+              <p className="text-xs text-muted-foreground">
+                {earnings === null
+                  ? "Loading your supporters..."
+                  : earnings.supporters === 0
+                    ? "No tips yet. Share your profile so people can support you."
+                    : `Directly received from ${earnings.supporters} community supporter${earnings.supporters === 1 ? "" : "s"}.`}
+              </p>
             </div>
 
             <div className="space-y-2.5">
               <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Recent Supporters</h4>
               <div className="space-y-2">
-                {[
-                  { name: "Elena Rostova", amount: "$25.00", note: "Loved your latest design breakdown!", time: "2h ago" },
-                  { name: "David Park", amount: "$10.00", note: "Keep creating awesome content 🚀", time: "1d ago" },
-                  { name: "Maya Lin", amount: "$50.00", note: "Super helpful audio space yesterday!", time: "3d ago" },
-                ].map((s, i) => (
-                  <div key={i} className="flex items-center justify-between rounded-2xl bg-foreground/[0.03] p-3 text-xs border border-border/50">
-                    <div>
-                      <p className="font-bold text-foreground">{s.name}</p>
-                      <p className="text-muted-foreground text-[11px] italic">"{s.note}"</p>
+                {(earnings?.recent ?? []).length === 0 ? (
+                  <p className="rounded-2xl border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">
+                    Tips you receive will appear here.
+                  </p>
+                ) : (
+                  (earnings?.recent ?? []).map((s) => (
+                    <div key={s.id} className="flex items-center justify-between rounded-2xl bg-foreground/[0.03] p-3 text-xs border border-border/50">
+                      <div>
+                        <p className="font-bold text-foreground">{s.sender}</p>
+                        {s.message ? (
+                          <p className="text-muted-foreground text-[11px] italic">"{s.message}"</p>
+                        ) : null}
+                      </div>
+                      <div className="text-right">
+                        <p className="font-extrabold text-amber-500">${s.amount.toFixed(2)}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {new Date(s.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-extrabold text-amber-500">{s.amount}</p>
-                      <p className="text-[10px] text-muted-foreground">{s.time}</p>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
 
             <div className="pt-2">
               <button
                 type="button"
-                onClick={() => {
-                  toast.success("Payout request submitted! Funds will arrive in 1-2 business days.");
-                  onClose();
+                disabled={(earnings?.total ?? 0) < 10}
+                onClick={async () => {
+                  try {
+                    const res = await payout({});
+                    toast.success(`Payout of $${res.amount.toFixed(2)} requested. Funds arrive in 1-2 business days.`);
+                    onClose();
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Payout request failed.");
+                  }
                 }}
-                className="w-full rounded-2xl bg-gradient-to-r from-brand to-brand-pink py-3 text-sm font-extrabold text-white shadow-soft hover:shadow-glow transition-all cursor-pointer active:scale-98"
+                className="w-full rounded-2xl bg-gradient-to-r from-brand to-brand-pink py-3 text-sm font-extrabold text-white shadow-soft hover:shadow-glow transition-all cursor-pointer active:scale-98 disabled:opacity-50"
               >
-                Request Payout ($142.50)
+                Request Payout ({"$"}{(earnings?.total ?? 0).toFixed(2)})
               </button>
             </div>
           </div>
