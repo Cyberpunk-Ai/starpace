@@ -38,7 +38,9 @@ import { setLoggedOut, useAuth, updateUserSession } from "@/lib/auth-state";
 import { usePlan, openUpgradeModal } from "@/lib/plan-state";
 import { useTheme, ACCENT_PALETTES, type ThemeAccent, type ThemeMode } from "@/lib/theme-state";
 import { PLAN_DETAILS, type PlanTier } from "@/lib/plans";
+import { PaymentHistory } from "@/components/social/PaymentHistory";
 import { cn } from "@/lib/utils";
+
 import { toast } from "sonner";
 import {
   updateUserProfile,
