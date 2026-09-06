@@ -5,11 +5,16 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 type PlanTier = "plus" | "pro";
 type BillingCycle = "monthly" | "annual";
 
-/** Amounts charged, in the smallest unit of PAYSTACK_CURRENCY (default KES cents). */
+/**
+ * Prices are advertised in USD but the merchant account settles in KES, so we
+ * charge the KES equivalent. Values are whole shillings; the handler converts
+ * them to the smallest unit (cents) that Paystack expects.
+ */
 const PRICES: Record<PlanTier, Record<BillingCycle, number>> = {
   plus: { monthly: 1200, annual: 11500 },
   pro: { monthly: 3900, annual: 37400 },
 };
+
 
 function money(plan: PlanTier, cycle: BillingCycle) {
   return PRICES[plan][cycle];
