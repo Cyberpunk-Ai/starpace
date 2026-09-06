@@ -762,7 +762,10 @@ function SettingsPage() {
                     </div>
                   </div>
                 </div>
+
+                <PaymentHistory />
               </div>
+
             )}
 
             {active === "analytics" && (
