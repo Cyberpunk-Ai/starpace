@@ -43,7 +43,9 @@ export const ensureMyProfile = createServerFn({ method: "POST" })
         .maybeSingle();
 
       if (!error && row) return { id: row.id as string, created: true };
+      console.error("profile insert failed", { attempt, error, row });
       if (error && !/duplicate|unique/i.test(error.message)) throw new Error(error.message);
+      if (!error && !row) throw new Error("Profile insert returned no row.");
     }
 
     throw new Error("Could not create your profile. Please try again.");
