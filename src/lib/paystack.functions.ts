@@ -215,6 +215,7 @@ export const confirmPaystackPayment = createServerFn({ method: "POST" })
     }
 
     const success = tx.status === "success";
+    const isTip = meta.kind === "tip";
     const plan = (meta.plan as PlanTier) ?? "plus";
     const cycle = (meta.billing_cycle as BillingCycle) ?? "monthly";
 
@@ -229,7 +230,41 @@ export const confirmPaystackPayment = createServerFn({ method: "POST" })
       })
       .eq("reference", data.reference);
 
-    if (!success) return { status: tx.status ?? "failed", plan, cycle };
+    if (!success) {
+      return { status: tx.status ?? "failed", kind: isTip ? "tip" : "plan", plan, cycle };
+    }
+
+    if (isTip) {
+      const admin = supabaseAdmin as any;
+      const { data: already } = await admin
+        .from("tips")
+        .select("id")
+        .eq("message", `${meta.note ?? ""}`)
+        .eq("from_user_id", profile.id)
+        .eq("to_user_id", meta.recipient_id)
+        .eq("amount", meta.tip_usd)
+        .limit(1);
+
+      if (!already?.length) {
+        await admin.from("tips").insert({
+          from_user_id: profile.id,
+          to_user_id: meta.recipient_id,
+          amount: meta.tip_usd,
+          message: meta.note ?? "",
+          post_id: meta.post_id ?? null,
+        });
+      }
+
+      return {
+        status: "success" as const,
+        kind: "tip" as const,
+        plan,
+        cycle,
+        recipient: meta.recipient_username as string,
+        amount: Number(meta.tip_usd ?? 0),
+      };
+    }
+
 
     await (supabaseAdmin as any).from("profiles").update({ plan }).eq("id", profile.id);
     await (supabaseAdmin as any).from("subscriptions").upsert(
