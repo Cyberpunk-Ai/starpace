@@ -5,9 +5,10 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 type PlanTier = "plus" | "pro";
 type BillingCycle = "monthly" | "annual";
 
+/** Amounts charged, in the smallest unit of PAYSTACK_CURRENCY (default KES cents). */
 const PRICES: Record<PlanTier, Record<BillingCycle, number>> = {
-  plus: { monthly: 9, annual: 84 },
-  pro: { monthly: 29, annual: 276 },
+  plus: { monthly: 1200, annual: 11500 },
+  pro: { monthly: 3900, annual: 37400 },
 };
 
 function money(plan: PlanTier, cycle: BillingCycle) {
@@ -55,7 +56,7 @@ export const startPaystackCheckout = createServerFn({ method: "POST" })
     if (!profile) throw new Error("Complete your profile before upgrading.");
 
     const email = claims?.email ?? `${profile.id}@users.noreply.app`;
-    const currency = process.env["PAYSTACK_CURRENCY"] || "USD";
+    const currency = process.env["PAYSTACK_CURRENCY"] || "KES";
     const amount = money(data.plan, data.cycle) * 100;
     const reference = `sub_${crypto.randomUUID().replace(/-/g, "")}`;
 
