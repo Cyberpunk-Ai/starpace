@@ -15,10 +15,13 @@ const PRICES: Record<PlanTier, Record<BillingCycle, number>> = {
   pro: { monthly: 3770, annual: 35880 },
 };
 
+/** USD is what we advertise; the merchant account settles in KES. */
+const USD_TO_KES = Number(process.env["PAYSTACK_USD_RATE"] ?? 130);
 
 function money(plan: PlanTier, cycle: BillingCycle) {
   return PRICES[plan][cycle];
 }
+
 
 function paystackKey() {
   const key = process.env["PAYSTACK_SECRET_KEY"];
