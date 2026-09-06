@@ -31,21 +31,22 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [checkInbox, setCheckInbox] = useState(false);
 
-  async function ensureProfile(authUserId: string, fallbackEmail: string) {
-    const { data: existing } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("auth_user_id", authUserId)
-      .maybeSingle();
-    if (existing) return;
-
-    const handle = (fallbackEmail.split("@")[0] || "member").replace(/[^a-z0-9_]/gi, "").toLowerCase();
-    await supabase.from("profiles").insert({
-      auth_user_id: authUserId,
-      username: `${handle}${Math.floor(Math.random() * 9000 + 1000)}`,
-      display_name: displayName.trim() || handle,
-    });
+  async function handleGoogle() {
+    setBusy(true);
+    try {
+      const result = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
+      });
+      if (result.error) throw new Error(result.error.message ?? "Google sign-in failed");
+      if (result.redirected) return;
+      void navigate({ to: "/" });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Google sign-in failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -56,15 +57,21 @@ function AuthPage() {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: `${window.location.origin}/` },
+          options: {
+            emailRedirectTo: `${window.location.origin}/`,
+            data: { display_name: displayName.trim() },
+          },
         });
         if (error) throw error;
-        if (data.user) await ensureProfile(data.user.id, email);
+        if (!data.session) {
+          setCheckInbox(true);
+          toast.success("Almost there — confirm your email to finish signing up.");
+          return;
+        }
         toast.success("Account created — welcome to Spaces!");
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        if (data.user) await ensureProfile(data.user.id, email);
         toast.success("Signed in");
       }
       void navigate({ to: "/" });
@@ -74,6 +81,7 @@ function AuthPage() {
       setBusy(false);
     }
   }
+
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
