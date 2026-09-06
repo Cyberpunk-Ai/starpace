@@ -529,6 +529,68 @@ export type Database = {
           },
         ]
       }
+      payments: {
+        Row: {
+          amount: number
+          authorization_url: string | null
+          billing_cycle: string
+          created_at: string
+          currency: string
+          email: string | null
+          id: string
+          paid_at: string | null
+          plan: string
+          provider: string
+          raw: Json
+          reference: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          authorization_url?: string | null
+          billing_cycle?: string
+          created_at?: string
+          currency?: string
+          email?: string | null
+          id?: string
+          paid_at?: string | null
+          plan: string
+          provider?: string
+          raw?: Json
+          reference: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          authorization_url?: string | null
+          billing_cycle?: string
+          created_at?: string
+          currency?: string
+          email?: string | null
+          id?: string
+          paid_at?: string | null
+          plan?: string
+          provider?: string
+          raw?: Json
+          reference?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payouts: {
         Row: {
           amount: number
