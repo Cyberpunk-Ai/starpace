@@ -42,9 +42,13 @@ function BillingCallback() {
     confirm({ data: { reference } })
       .then((res: any) => {
         if (res.status === "success") {
-          setPlan(res.plan);
+          setPlan(res.kind === "tip" ? "tip" : res.plan);
           setState("success");
-          setMessage("Payment confirmed. Your new plan is active.");
+          setMessage(
+            res.kind === "tip"
+              ? `Your $${Number(res.amount ?? 0).toFixed(2)} tip to @${res.recipient} is on its way.`
+              : "Payment confirmed. Your new plan is active.",
+          );
           router.invalidate();
         } else {
           setState("failed");
@@ -67,7 +71,9 @@ function BillingCallback() {
         </div>
         <h1 className="mt-5 text-xl font-bold text-foreground">
           {state === "success"
-            ? `Welcome to ${plan === "pro" ? "Pro" : "Plus"}`
+            ? plan === "tip"
+              ? "Tip sent"
+              : `Welcome to ${plan === "pro" ? "Pro" : "Plus"}`
             : state === "failed"
               ? "Payment not completed"
               : "One moment"}
