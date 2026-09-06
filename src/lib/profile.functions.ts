@@ -13,25 +13,30 @@ function handleFrom(email: string | undefined, fallback: string) {
  * off `current_profile_id()` cannot let them insert one themselves.
  */
 export const ensureMyProfile = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator((input: { displayName?: string } | undefined) => input ?? {})
+  .middleware([requireSupabaseAuth])
   .handler(async ({ data, context }) => {
     const { userId, claims } = context;
-
-    const { data: existing } = await context.supabase
-      .from("profiles")
-      .select("id")
-      .eq("auth_user_id", userId)
-      .maybeSingle();
-    if (existing) return { id: existing.id as string, created: false };
-
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const lookup = async () => {
+      const { data: row } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .eq("auth_user_id", userId)
+        .maybeSingle();
+      return (row?.id as string | undefined) ?? null;
+    };
+
+    const existing = await lookup();
+    if (existing) return { id: existing, created: false };
 
     const email = (claims as { email?: string } | null)?.email;
     const handle = handleFrom(email, "member");
 
     for (let attempt = 0; attempt < 5; attempt++) {
-      const username = attempt === 0 ? handle : `${handle}${Math.floor(Math.random() * 9000 + 1000)}`;
+      const username =
+        attempt === 0 ? handle : `${handle}${Math.floor(Math.random() * 9000 + 1000)}`;
       const { data: row, error } = await supabaseAdmin
         .from("profiles")
         .insert({
@@ -43,9 +48,16 @@ export const ensureMyProfile = createServerFn({ method: "POST" })
         .maybeSingle();
 
       if (!error && row) return { id: row.id as string, created: true };
-      console.error("profile insert failed", { attempt, error, row });
-      if (error && !/duplicate|unique/i.test(error.message)) throw new Error(error.message);
-      if (!error && !row) throw new Error("Profile insert returned no row.");
+
+      // Another request (or a retry) may have created the row first.
+      const raced = await lookup();
+      if (raced) return { id: raced, created: false };
+
+      // Only a username clash is worth retrying; anything else is fatal.
+      if (error && !/profiles_username/i.test(error.message)) {
+        console.error("profile insert failed", error);
+        throw new Error(error.message);
+      }
     }
 
     throw new Error("Could not create your profile. Please try again.");
