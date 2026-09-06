@@ -196,10 +196,6 @@ export const confirmPaystackPayment = createServerFn({ method: "POST" })
     if (!input.reference || input.reference.length > 128) throw new Error("Invalid reference");
     return input;
   })
-
-    if (!input.reference || input.reference.length > 128) throw new Error("Invalid reference");
-    return input;
-  })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
 
