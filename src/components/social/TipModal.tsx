@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Heart, DollarSign, Sparkles, Check, X, ShieldCheck } from "lucide-react";
 import { Avatar } from "@/components/social/Avatar";
@@ -6,7 +6,9 @@ import { UserBadge } from "@/components/social/UserBadge";
 import { useMonetization } from "@/lib/monetization-state";
 import { useAuth } from "@/lib/auth-state";
 import { currentUser } from "@/lib/profile-service";
-import { sendTipApi } from "@/lib/api-client";
+import { useServerFn } from "@tanstack/react-start";
+import { startTipCheckout } from "@/lib/paystack.functions";
+import { getMyTipEarnings, requestTipPayout } from "@/lib/tips.functions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -26,9 +28,16 @@ interface TipModalProps {
 const PRESET_AMOUNTS = [2, 5, 10, 25, 50];
 
 export function TipModal({ isOpen, onClose, recipient, postId, spaceId }: TipModalProps) {
-  const { sendTip } = useMonetization();
   const { user } = useAuth();
   const activeUser = user || currentUser;
+  const beginTip = useServerFn(startTipCheckout);
+  const loadEarnings = useServerFn(getMyTipEarnings);
+  const payout = useServerFn(requestTipPayout);
+  const [earnings, setEarnings] = useState<{
+    total: number;
+    supporters: number;
+    recent: { id: string; amount: number; message: string; created_at: string; sender: string }[];
+  } | null>(null);
 
   const [selectedAmount, setSelectedAmount] = useState<number>(5);
   const [customAmount, setCustomAmount] = useState<string>("");
@@ -38,6 +47,13 @@ export function TipModal({ isOpen, onClose, recipient, postId, spaceId }: TipMod
 
   const isSelf = recipient.username === activeUser.username;
 
+  useEffect(() => {
+    if (!isOpen || !isSelf) return;
+    loadEarnings({})
+      .then((res: any) => setEarnings(res))
+      .catch(() => setEarnings({ total: 0, supporters: 0, recent: [] }));
+  }, [isOpen, isSelf]);
+
   if (!isOpen) return null;
   if (typeof document === "undefined") return null;
 
@@ -46,36 +62,27 @@ export function TipModal({ isOpen, onClose, recipient, postId, spaceId }: TipMod
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSelf) return;
-    if (effectiveAmount <= 0) {
+    if (!(effectiveAmount > 0)) {
       toast.error("Please enter a valid tip amount");
       return;
     }
 
     setIsSubmitting(true);
-
     try {
-      await sendTip({
-        recipientUsername: recipient.username,
-        amount: effectiveAmount,
-        message: message.trim() || undefined,
-        senderName: activeUser.display_name,
-        senderUsername: activeUser.username,
-        senderAvatar: activeUser.avatar_url || undefined,
-        postId,
-        spaceId,
+      const res = await beginTip({
+        data: {
+          recipientUsername: recipient.username,
+          amount: effectiveAmount,
+          message: message.trim() || undefined,
+          postId: postId ?? null,
+          origin: window.location.origin,
+        },
       });
-
+      if (!res?.authorizationUrl) throw new Error("Payment could not be started.");
+      window.location.href = res.authorizationUrl;
+    } catch (err) {
       setIsSubmitting(false);
-      setIsSuccess(true);
-      toast.success(`Sent $${effectiveAmount.toFixed(2)} tip to @${recipient.username}! 🎉`);
-
-      setTimeout(() => {
-        setIsSuccess(false);
-        onClose();
-      }, 1400);
-    } catch {
-      setIsSubmitting(false);
-      toast.error("Failed to send tip. Please try again.");
+      toast.error(err instanceof Error ? err.message : "Failed to start the payment.");
     }
   };
 
