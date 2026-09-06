@@ -11,8 +11,8 @@ type BillingCycle = "monthly" | "annual";
  * them to the smallest unit (cents) that Paystack expects.
  */
 const PRICES: Record<PlanTier, Record<BillingCycle, number>> = {
-  plus: { monthly: 1200, annual: 11500 },
-  pro: { monthly: 3900, annual: 37400 },
+  plus: { monthly: 1170, annual: 10920 },
+  pro: { monthly: 3770, annual: 35880 },
 };
 
 
