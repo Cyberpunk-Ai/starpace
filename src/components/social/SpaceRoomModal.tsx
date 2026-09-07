@@ -29,6 +29,8 @@ import type { Space, Profile } from "@/lib/types";
 import { currentUser, getProfile } from "@/lib/profile-service";
 import {
   joinSpace,
+  getSpaceRoom,
+  setSpaceParticipantRole,
   leaveSpace,
   toggleSpeaking,
   toggleHandRaised,
@@ -102,48 +104,60 @@ function SpaceRoomModalContent({ space, onClose }: { space: Space; onClose: () =
   const host = getProfile(space.host_id);
   const isCurrentUserHost = space.host_id === currentUser.id;
 
-  // Initialize participants
+  // Load the room from the backend: who is here and what has been said.
   useEffect(() => {
-    const initialParticipants = (space.participants || []).map((p) => {
-      const profile = getProfile(p.id);
-      return {
-        id: p.id,
-        role: (p.role as "host" | "speaker" | "listener") || "listener",
-        isSpeaking: !!p.isSpeaking,
-        isMuted: !!p.isMuted,
-        handRaised: !!p.handRaised,
-        display_name: profile.display_name,
-        username: profile.username,
-        avatar_url: profile.avatar_url || undefined,
-      };
-    });
+    let cancelled = false;
 
-    if (!initialParticipants.some((p) => p.id === currentUser.id)) {
-      initialParticipants.push({
-        id: currentUser.id,
-        role: isCurrentUserHost ? "host" : "listener",
-        isSpeaking: false,
-        isMuted: true,
-        handRaised: false,
-        display_name: currentUser.display_name,
-        username: currentUser.username,
-        avatar_url: currentUser.avatar_url || undefined,
+    void (async () => {
+      let loaded: Awaited<ReturnType<typeof getSpaceRoom>> = { participants: [], messages: [] };
+      try {
+        await joinSpace(space.id);
+        loaded = await getSpaceRoom(space.id);
+      } catch {
+        /* offline: fall back to just me */
+      }
+      if (cancelled) return;
+
+      const list = loaded.participants.map((p) => {
+        const profile = getProfile(p.id);
+        return {
+          id: p.id,
+          role: p.id === space.host_id ? ("host" as const) : p.role,
+          isSpeaking: p.isSpeaking,
+          isMuted: p.isMuted,
+          handRaised: p.handRaised,
+          display_name: profile.display_name,
+          username: profile.username,
+          avatar_url: profile.avatar_url || undefined,
+        };
       });
-    }
 
-    setParticipants(initialParticipants);
-    setMessages(
-      (space.messages || []).map((m: any) => ({
-        id: m.id,
-        userId: m.user_id || m.userId || "",
-        body: m.body || "",
-        timestamp: m.timestamp || m.created_at || "Just now",
-      }))
-    );
+      if (!list.some((p) => p.id === currentUser.id)) {
+        list.push({
+          id: currentUser.id,
+          role: isCurrentUserHost ? "host" : "listener",
+          isSpeaking: false,
+          isMuted: true,
+          handRaised: false,
+          display_name: currentUser.display_name,
+          username: currentUser.username,
+          avatar_url: currentUser.avatar_url || undefined,
+        });
+      }
 
-    joinSpace(space.id).catch(() => {});
+      setParticipants(list);
+      setMessages(
+        loaded.messages.map((m) => ({
+          id: m.id,
+          userId: m.userId,
+          body: m.body,
+          timestamp: m.created_at,
+        })),
+      );
+    })();
 
     return () => {
+      cancelled = true;
       leaveSpace(space.id).catch(() => {});
     };
   }, [space.id]);
@@ -151,8 +165,9 @@ function SpaceRoomModalContent({ space, onClose }: { space: Space; onClose: () =
   // Real-time events
   useRealtime(
     (event) => {
-      if (event.type === "space_chat_message") {
-        const msg = event.data || event.message;
+      if (event.type === "space:message" || event.type === "space_chat_message") {
+        const msg = event.message || event.data;
+        if (msg && msg.userId === currentUser.id) return;
         if (msg) {
           setMessages((prev) => [
             ...prev,
@@ -164,7 +179,7 @@ function SpaceRoomModalContent({ space, onClose }: { space: Space; onClose: () =
             },
           ]);
         }
-      } else if (event.type === "space_tip") {
+      } else if (event.type === "space:tip" || event.type === "space_tip") {
         const tip = event.tip || event.data;
         if (tip) {
           setActiveTipAlert({
@@ -187,34 +202,49 @@ function SpaceRoomModalContent({ space, onClose }: { space: Space; onClose: () =
           triggerReaction("💰");
           setTimeout(() => setActiveTipAlert(null), 6000);
         }
-      } else if (event.type === "speaking_state") {
+      } else if (event.type === "space:speaking" || event.type === "speaking_state") {
         const data = event.data || event;
         if (data && data.userId) {
           setParticipants((prev) =>
             prev.map((p) =>
               p.id === data.userId
-                ? { ...p, isSpeaking: !!data.isSpeaking, isMuted: !!data.isMuted }
+                ? { ...p, isSpeaking: !!(data.isSpeaking ?? data.speaking), isMuted: !!(data.isMuted ?? data.muted) }
                 : p
             )
           );
         }
-      } else if (event.type === "hand_raised") {
+      } else if (event.type === "space:hand" || event.type === "hand_raised") {
         const data = event.data || event;
         if (data && data.userId && data.userId !== currentUser.id) {
           const user = getProfile(data.userId);
           toast.info(`${user.display_name} raised their hand!`);
           setParticipants((prev) =>
-            prev.map((p) => (p.id === data.userId ? { ...p, handRaised: true } : p))
+            prev.map((p) => (p.id === data.userId ? { ...p, handRaised: data.raised !== false } : p))
           );
         }
-      } else if (event.type === "participant_left") {
+      } else if (event.type === "space:role") {
+        const data = event.data || event;
+        if (data && data.userId) {
+          setParticipants((prev) =>
+            prev.map((p) => (p.id === data.userId ? { ...p, role: data.role, handRaised: false } : p)),
+          );
+        }
+      } else if (event.type === "space:left" || event.type === "participant_left") {
         const data = event.data || event;
         if (data && data.userId) {
           setParticipants((prev) => prev.filter((p) => p.id !== data.userId));
         }
       }
     },
-    ["space_chat_message", "speaking_state", "hand_raised", "participant_joined", "participant_left", "space_tip"]
+    [
+      "space:message",
+      "space:speaking",
+      "space:hand",
+      "space:role",
+      "space:joined",
+      "space:left",
+      "space:tip",
+    ]
   );
 
   useEffect(() => {
@@ -284,6 +314,7 @@ function SpaceRoomModalContent({ space, onClose }: { space: Space; onClose: () =
       prev.map((p) => (p.id === userId ? { ...p, role: "speaker", handRaised: false } : p))
     );
     const target = getProfile(userId);
+    void setSpeakerRole(userId, "speaker");
     toast.success(`Invited ${target.display_name} to speak!`);
   };
 
@@ -292,8 +323,17 @@ function SpaceRoomModalContent({ space, onClose }: { space: Space; onClose: () =
       prev.map((p) => (p.id === userId ? { ...p, role: "listener", isSpeaking: false, isMuted: true } : p))
     );
     const target = getProfile(userId);
+    void setSpeakerRole(userId, "listener");
     toast.info(`Moved ${target.display_name} to listeners`);
   };
+
+  async function setSpeakerRole(userId: string, role: "speaker" | "listener") {
+    try {
+      await setSpaceParticipantRole(space.id, userId, role);
+    } catch {
+      toast.error("Couldn't save that change — try again.");
+    }
+  }
 
   async function handleSummarize() {
     setSummarizing(true);
