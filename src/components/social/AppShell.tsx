@@ -111,6 +111,10 @@ function Sidebar({
     { label: "Settings", to: "/settings", icon: Settings },
   ];
 
+  if (hasConsoleAccess) {
+    navItems.push({ label: "Admin", to: "/admin", icon: ShieldCheck });
+  }
+
   return (
     <div className="flex h-full flex-col gap-2">
       <div className="mb-4 flex items-center justify-between px-2 py-2">
