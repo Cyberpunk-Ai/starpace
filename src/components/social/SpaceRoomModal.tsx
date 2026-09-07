@@ -109,7 +109,18 @@ function SpaceRoomModalContent({ space, onClose }: { space: Space; onClose: () =
     let cancelled = false;
 
     void (async () => {
-      let loaded: Awaited<ReturnType<typeof getSpaceRoom>> = { participants: [], messages: [] };
+      type RoomParticipant = {
+        id: string;
+        role: "host" | "speaker" | "listener";
+        isSpeaking: boolean;
+        isMuted: boolean;
+        handRaised: boolean;
+      };
+      type RoomMessage = { id: string; userId: string; body: string; created_at: string };
+      let loaded: { participants: RoomParticipant[]; messages: RoomMessage[] } = {
+        participants: [],
+        messages: [],
+      };
       try {
         await joinSpace(space.id);
         loaded = await getSpaceRoom(space.id);
@@ -118,7 +129,7 @@ function SpaceRoomModalContent({ space, onClose }: { space: Space; onClose: () =
       }
       if (cancelled) return;
 
-      const list = loaded.participants.map((p) => {
+      const list = loaded.participants.map((p: RoomParticipant) => {
         const profile = getProfile(p.id);
         return {
           id: p.id,
@@ -132,7 +143,7 @@ function SpaceRoomModalContent({ space, onClose }: { space: Space; onClose: () =
         };
       });
 
-      if (!list.some((p) => p.id === currentUser.id)) {
+      if (!list.some((p: { id: string }) => p.id === currentUser.id)) {
         list.push({
           id: currentUser.id,
           role: isCurrentUserHost ? "host" : "listener",
@@ -147,7 +158,7 @@ function SpaceRoomModalContent({ space, onClose }: { space: Space; onClose: () =
 
       setParticipants(list);
       setMessages(
-        loaded.messages.map((m) => ({
+        loaded.messages.map((m: RoomMessage) => ({
           id: m.id,
           userId: m.userId,
           body: m.body,
