@@ -588,6 +588,58 @@ export async function sendSpaceMessage(spaceId: string, body: string) {
   return { message };
 }
 
+/** Everyone currently in the room plus the recent chat, straight from the backend. */
+export async function getSpaceRoom(spaceId: string) {
+  const [{ data: parts }, { data: msgs }] = await Promise.all([
+    db.from("space_participants").select("*").eq("space_id", spaceId),
+    db
+      .from("space_messages")
+      .select("*")
+      .eq("space_id", spaceId)
+      .order("created_at", { ascending: true })
+      .limit(200),
+  ]);
+
+  const ids = [
+    ...new Set([
+      ...(parts ?? []).map((p: any) => p.user_id),
+      ...(msgs ?? []).map((m: any) => m.user_id),
+    ]),
+  ];
+  if (ids.length) await hydrateAuthors(ids);
+
+  return {
+    participants: (parts ?? []).map((p: any) => ({
+      id: p.user_id,
+      role: (p.role ?? "listener") as "host" | "speaker" | "listener",
+      isSpeaking: !!p.is_speaking,
+      isMuted: !!p.is_muted,
+      handRaised: !!p.hand_raised,
+    })),
+    messages: (msgs ?? []).map((m: any) => ({
+      id: m.id,
+      userId: m.user_id,
+      body: m.body,
+      created_at: m.created_at,
+    })),
+  };
+}
+
+/** Host action: move somebody between stage and audience. */
+export async function setSpaceParticipantRole(
+  spaceId: string,
+  userId: string,
+  role: "host" | "speaker" | "listener",
+) {
+  await db
+    .from("space_participants")
+    .update({ role, hand_raised: false, is_muted: role === "listener" })
+    .eq("space_id", spaceId)
+    .eq("user_id", userId);
+  emitRealtime("space:role", { spaceId, userId, role });
+  return { ok: true };
+}
+
 export async function terminateSpaceAdmin(spaceId: string, actorId: string) {
   await db.from("spaces").update({ live: false }).eq("id", spaceId);
   await logAudit(actorId, "space.terminate", "space", spaceId, "Space terminated by admin", "danger");
