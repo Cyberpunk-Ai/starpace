@@ -17,6 +17,7 @@ import {
   X,
   Sun,
   Moon,
+  ShieldCheck,
 } from "lucide-react";
 import { Avatar } from "@/components/social/Avatar";
 import { UserBadge } from "@/components/social/UserBadge";
@@ -28,7 +29,30 @@ import { PLAN_DETAILS } from "@/lib/plans";
 import { useUnreadCounts } from "@/lib/unread-state";
 import { useTheme } from "@/lib/theme-state";
 import { UpgradeModal } from "@/components/social/UpgradeModal";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+
+/** True when the signed-in person can open the admin console. */
+function useConsoleAccess() {
+  const [allowed, setAllowed] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase.auth.getUser();
+      const id = data.user?.id;
+      if (!id) return;
+      const [{ data: isAdmin }, { data: isMod }] = await Promise.all([
+        supabase.rpc("has_role", { _user_id: id, _role: "admin" }),
+        supabase.rpc("has_role", { _user_id: id, _role: "moderator" }),
+      ]);
+      if (!cancelled) setAllowed(Boolean(isAdmin || isMod));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return allowed;
+}
 
 type NavItem = {
   label: string;
@@ -86,6 +110,7 @@ function Sidebar({
   const { currentPlan, isPlus, isPro } = usePlan();
   const { user, signOut } = useAuth();
   const { isDark, toggleTheme } = useTheme();
+  const hasConsoleAccess = useConsoleAccess();
   const planInfo = PLAN_DETAILS[currentPlan] || PLAN_DETAILS.free;
   const activeUser = user || currentUser;
 
