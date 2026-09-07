@@ -68,16 +68,23 @@ async function consumeQuota(authUserId: string) {
 
 async function chat(system: string, user: string): Promise<string> {
   const apiKey = process.env["LOVABLE_API_KEY"];
-  if (!apiKey) throw new Error("AI is not configured yet.");
+  if (!apiKey) {
+    throw new Error("The AI assistant isn't configured yet. Add an AI key to enable it.");
+  }
 
-  const res = await fetch(GATEWAY, {
+  // Model and gateway are environment-configurable so the same build can be
+  // pointed at a different assistant without a code change.
+  const model = process.env["AI_TEXT_MODEL"] || MODEL;
+  const gateway = process.env["AI_GATEWAY_URL"] || GATEWAY;
+
+  const res = await fetch(gateway, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model,
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
@@ -86,8 +93,15 @@ async function chat(system: string, user: string): Promise<string> {
   });
 
   if (res.status === 429) throw new Error("AI is busy right now — try again in a moment.");
-  if (res.status === 402) throw new Error("AI credits have run out for this workspace.");
+  if (res.status === 402) {
+    throw new Error("AI credits have run out for this workspace. Top up to keep generating.");
+  }
+  if (res.status === 401 || res.status === 403) {
+    throw new Error("The AI assistant isn't authorised. Check the AI key settings.");
+  }
+  if (res.status === 400) throw new Error(`The AI model "${model}" isn't available.`);
   if (!res.ok) throw new Error(`AI request failed (${res.status})`);
+
 
   const json = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
