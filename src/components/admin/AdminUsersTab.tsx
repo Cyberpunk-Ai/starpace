@@ -56,7 +56,7 @@ export function AdminUsersTab({ activeRole, currentUserId }: AdminUsersTabProps)
       } catch {
         roleMap = {};
       }
-      setUsers(res.map((u) => ({ ...u, role: (roleMap[u.id] as UserRole) ?? u.role ?? "user" })));
+      setUsers(res.map((u: Profile) => ({ ...u, role: (roleMap[u.id] as UserRole) ?? u.role ?? "user" })));
     } catch (err) {
       console.error("Failed to load admin users", err);
     } finally {
