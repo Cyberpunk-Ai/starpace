@@ -223,11 +223,11 @@ export function CallModal({
               </span>
               {statusLabel}
             </span>
-            <span className="flex items-center gap-1 text-[11px] text-white/60 bg-white/10 px-2 py-0.5 rounded-full">
+            <span className="flex items-center gap-1 text-[11px] text-white/85 bg-white/20 px-2 py-0.5 rounded-full">
               <Wifi className="h-3 w-3 text-emerald-400" /> {type === "video" ? "Video" : "Audio"}
             </span>
           </div>
-          <span className="font-mono text-xs font-semibold text-white/80 bg-white/10 px-2.5 py-1 rounded-full">{formattedTime}</span>
+          <span className="font-mono text-xs font-semibold text-white/95 bg-white/20 px-2.5 py-1 rounded-full">{formattedTime}</span>
         </div>
 
         {/* Center Calling Area */}
@@ -262,7 +262,7 @@ export function CallModal({
               </div>
 
               <h3 className="mt-5 text-xl font-extrabold tracking-tight">{partner.display_name}</h3>
-              <p className="text-xs text-white/60 mt-1">
+              <p className="text-xs text-white/85 mt-1">
                 @{partner.username} · {statusLabel}
               </p>
             </div>
@@ -294,19 +294,19 @@ export function CallModal({
                 </span>
                 <button
                   onClick={() => setShowInCallChat(false)}
-                  className="text-xs text-white/60 hover:text-white"
+                  className="text-xs text-white/85 hover:text-white"
                 >
                   Close
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto space-y-2 py-2 text-left">
-                <div className="rounded-xl bg-white/10 p-2 text-xs">
-                  <p className="text-white/60 text-[10px]">@{partner.username}</p>
+                <div className="rounded-xl bg-white/20 p-2 text-xs">
+                  <p className="text-white/85 text-[10px]">@{partner.username}</p>
                   <p>Audio is super clear!</p>
                 </div>
                 {inCallNotes.map((n, i) => (
                   <div key={i} className="rounded-xl bg-brand/30 p-2 text-xs text-right">
-                    <p className="text-white/60 text-[10px]">You</p>
+                    <p className="text-white/85 text-[10px]">You</p>
                     <p>{n}</p>
                   </div>
                 ))}
@@ -318,7 +318,7 @@ export function CallModal({
                   onChange={(e) => setNoteDraft(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSendNote()}
                   placeholder="Type a message..."
-                  className="flex-1 bg-white/10 rounded-full px-3 py-1.5 text-xs text-white placeholder:text-white/40 outline-none"
+                  className="flex-1 bg-white/20 rounded-full px-3 py-1.5 text-xs text-white placeholder:text-white/70 outline-none"
                 />
                 <button
                   onClick={handleSendNote}
@@ -343,7 +343,7 @@ export function CallModal({
             <button
               key={idx}
               onClick={() => triggerReaction(item.emoji)}
-              className="rounded-full bg-white/10 hover:bg-white/20 p-2 text-base transition-transform active:scale-125 cursor-pointer"
+              className="rounded-full bg-white/20 hover:bg-white/20 p-2 text-base transition-transform active:scale-125 cursor-pointer"
               title={`Send ${item.emoji}`}
             >
               {item.emoji}
@@ -359,11 +359,11 @@ export function CallModal({
             aria-label={muted ? "Unmute microphone" : "Mute microphone"}
             className={cn(
               "rounded-full p-3.5 backdrop-blur-md transition-all active:scale-95 shadow-md cursor-pointer",
-              muted ? "bg-rose-500 text-white" : "bg-white/15 text-white hover:bg-white/25"
+              muted ? "bg-rose-500 text-white" : "bg-white/25 text-white ring-1 ring-white/40 hover:bg-white/40"
             )}
             title={muted ? "Unmute" : "Mute"}
           >
-            {muted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+            {muted ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
           </button>
 
           {/* Toggle Video */}
@@ -372,11 +372,11 @@ export function CallModal({
             aria-label={videoOff ? "Turn on camera" : "Turn off camera"}
             className={cn(
               "rounded-full p-3.5 backdrop-blur-md transition-all active:scale-95 shadow-md cursor-pointer",
-              videoOff ? "bg-rose-500 text-white" : "bg-white/15 text-white hover:bg-white/25"
+              videoOff ? "bg-rose-500 text-white" : "bg-white/25 text-white ring-1 ring-white/40 hover:bg-white/40"
             )}
             title={videoOff ? "Turn on video" : "Turn off video"}
           >
-            {videoOff ? <VideoOff className="h-5 w-5" /> : <Video className="h-5 w-5" />}
+            {videoOff ? <VideoOff className="h-6 w-6" /> : <Video className="h-6 w-6" />}
           </button>
 
           {/* Screen Share */}
@@ -385,11 +385,11 @@ export function CallModal({
             aria-label="Share screen"
             className={cn(
               "rounded-full p-3.5 backdrop-blur-md transition-all active:scale-95 shadow-md cursor-pointer",
-              isScreenSharing ? "bg-indigo-600 text-white" : "bg-white/15 text-white hover:bg-white/25"
+              isScreenSharing ? "bg-indigo-600 text-white" : "bg-white/25 text-white ring-1 ring-white/40 hover:bg-white/40"
             )}
             title={isScreenSharing ? "Stop sharing" : "Share screen"}
           >
-            <Monitor className="h-5 w-5" />
+            <Monitor className="h-6 w-6" />
           </button>
 
           {/* Chat Toggle */}
@@ -398,11 +398,11 @@ export function CallModal({
             aria-label="Open in-call chat"
             className={cn(
               "rounded-full p-3.5 backdrop-blur-md transition-all active:scale-95 shadow-md cursor-pointer",
-              showInCallChat ? "bg-brand text-white" : "bg-white/15 text-white hover:bg-white/25"
+              showInCallChat ? "bg-brand text-white" : "bg-white/25 text-white ring-1 ring-white/40 hover:bg-white/40"
             )}
             title="In-call chat"
           >
-            <MessageSquare className="h-5 w-5" />
+            <MessageSquare className="h-6 w-6" />
           </button>
 
           {/* Speaker Toggle */}
@@ -414,11 +414,11 @@ export function CallModal({
             aria-label="Toggle speaker"
             className={cn(
               "rounded-full p-3.5 backdrop-blur-md transition-all active:scale-95 shadow-md cursor-pointer",
-              !isSpeakerOn ? "bg-amber-500 text-white" : "bg-white/15 text-white hover:bg-white/25"
+              !isSpeakerOn ? "bg-amber-500 text-white" : "bg-white/25 text-white ring-1 ring-white/40 hover:bg-white/40"
             )}
             title={isSpeakerOn ? "Speaker ON" : "Speaker OFF"}
           >
-            {isSpeakerOn ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+            {isSpeakerOn ? <Volume2 className="h-6 w-6" /> : <VolumeX className="h-6 w-6" />}
           </button>
 
           {/* End Call */}
@@ -428,7 +428,7 @@ export function CallModal({
             className="rounded-full bg-rose-600 hover:bg-rose-700 p-3.5 text-white transition-all active:scale-95 shadow-lg shadow-rose-600/40 cursor-pointer"
             title="Hang up"
           >
-            <PhoneOff className="h-5 w-5" />
+            <PhoneOff className="h-6 w-6" />
           </button>
         </div>
       </div>

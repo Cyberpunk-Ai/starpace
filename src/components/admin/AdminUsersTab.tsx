@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Avatar } from "@/components/social/Avatar";
 import { getAdminUsers, updateUserAdmin } from "@/lib/api-client";
+import { listAccessLevels, setAccessLevel } from "@/lib/admin.functions";
 import { useRealtime } from "@/lib/realtime";
 import type { Profile, UserRole, UserStatus } from "@/lib/types";
 import { ROLE_DEFINITIONS } from "./AdminHeader";
@@ -49,7 +50,13 @@ export function AdminUsersTab({ activeRole, currentUserId }: AdminUsersTabProps)
         status: selectedStatusFilter !== "all" ? selectedStatusFilter : undefined,
         verified: selectedVerifiedFilter === "all" ? undefined : selectedVerifiedFilter === "true",
       });
-      setUsers(res);
+      let roleMap: Record<string, string> = {};
+      try {
+        roleMap = (await listAccessLevels()) as Record<string, string>;
+      } catch {
+        roleMap = {};
+      }
+      setUsers(res.map((u: Profile) => ({ ...u, role: (roleMap[u.id] as UserRole) ?? u.role ?? "user" })));
     } catch (err) {
       console.error("Failed to load admin users", err);
     } finally {
@@ -71,10 +78,10 @@ export function AdminUsersTab({ activeRole, currentUserId }: AdminUsersTabProps)
 
   const handleUpdateRole = async (userId: string, newRole: UserRole) => {
     try {
-      const updated = await updateUserAdmin(userId, { role: newRole }, currentUserId);
-      setUsers((prev) => prev.map((u) => (u.id === userId ? updated : u)));
+      const res = await setAccessLevel({ data: { profileId: userId, role: newRole } });
+      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u)));
       setEditingUser(null);
-      showNotice(`Updated role for @${updated.username} to ${newRole}`);
+      showNotice(`Updated access for @${res.username} to ${newRole}`);
     } catch (err: any) {
       toast.error(err.message || "Failed to update role");
     }
