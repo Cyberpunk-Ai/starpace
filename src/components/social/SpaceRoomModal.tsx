@@ -852,7 +852,12 @@ function SpaceRoomModalContent({ space, onClose }: { space: Space; onClose: () =
                 </button>
               ) : (
                 <button
-                  onClick={() => {
+                  onClick={async () => {
+                    try {
+                      await leaveSpace(space.id);
+                    } catch {
+                      /* leaving is best effort */
+                    }
                     onClose();
                     toast.info("You left the Space");
                   }}
