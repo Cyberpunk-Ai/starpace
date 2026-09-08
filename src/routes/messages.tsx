@@ -617,29 +617,33 @@ function MessagesPage() {
   };
 
   const handleSaveEdit = (msgId: string) => {
-    if (!editDraft.trim()) return;
+    const body = editDraft.trim();
+    if (!body) return;
+    const original = all.find((m) => m.id === msgId);
     setAll((prev) =>
-      prev.map((m) =>
-        m.id === msgId ? { ...m, body: editDraft.trim(), is_edited: true } : m
-      )
+      prev.map((m) => (m.id === msgId ? { ...m, body, is_edited: true } : m))
     );
     setEditingMsgId(null);
     setEditDraft("");
-    toast.success("Message edited");
+    void editMessage(msgId, body)
+      .then(() => toast.success("Message edited"))
+      .catch(() => {
+        if (original) setAll((prev) => prev.map((m) => (m.id === msgId ? original : m)));
+        toast.error("Couldn't edit that message");
+      });
   };
 
   const handleDeleteMessage = (msgId: string) => {
     const targetMsg = all.find((m) => m.id === msgId);
     setAll((prev) => prev.filter((m) => m.id !== msgId));
-    toast.success("Message deleted", {
-      action: targetMsg
-        ? {
-            label: "Undo",
-            onClick: () => setAll((prev) => [...prev, targetMsg]),
-          }
-        : undefined,
-    });
+    void deleteMessage(msgId)
+      .then(() => toast.success("Message deleted"))
+      .catch(() => {
+        if (targetMsg) setAll((prev) => [...prev, targetMsg]);
+        toast.error("Couldn't delete that message");
+      });
   };
+
 
   const startVoiceRecording = async () => {
     try {
