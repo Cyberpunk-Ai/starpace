@@ -1108,7 +1108,12 @@ function MessagesPage() {
                                 key={emoji}
                                 type="button"
                                 onClick={() => handleToggleReaction(m.id, emoji)}
-                                className="cursor-pointer text-[11px] bg-background/80 dark:bg-card/90 backdrop-blur-xs px-2 py-0.5 rounded-full shadow-xs border border-border/40 hover:scale-105 transition-transform flex items-center gap-1 text-foreground"
+                                className={cn(
+                                  "cursor-pointer text-[11px] backdrop-blur-xs px-2 py-0.5 rounded-full shadow-xs border hover:scale-105 transition-transform flex items-center gap-1 text-foreground",
+                                  (myReactions[m.id] || []).includes(emoji)
+                                    ? "bg-brand/15 border-brand/50"
+                                    : "bg-background/80 dark:bg-card/90 border-border/40",
+                                )}
                               >
                                 <span>{emoji}</span>
                                 {count > 1 && <span className="font-bold text-[10px] text-muted-foreground">{count}</span>}
