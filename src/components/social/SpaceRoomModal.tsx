@@ -35,6 +35,7 @@ import {
   toggleSpeaking,
   toggleHandRaised,
   sendSpaceMessage,
+  endSpace,
   summarizeSpaceAI,
 } from "@/lib/api-client";
 import { useRealtime } from "@/lib/realtime";
