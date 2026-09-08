@@ -43,6 +43,7 @@ function SpacesSkeleton() {
 import { getProfile } from "@/lib/profile-service";
 import type { Space } from "@/lib/types";
 import { getSpaces, createSpace } from "@/lib/api-client";
+import { useRealtime } from "@/lib/realtime";
 import { usePlan, openUpgradeModal } from "@/lib/plan-state";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
