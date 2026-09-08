@@ -314,10 +314,9 @@ function MessagesPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
-  // Message reactions state: Record<msgId, Record<emoji, number>>
-  const [reactions, setReactions] = useState<Record<string, Record<string, number>>>({
-    m_sample_1: { "❤️": 2, "🔥": 1 },
-  });
+  // Message reactions loaded from the backend: Record<msgId, Record<emoji, count>>
+  const [reactions, setReactions] = useState<Record<string, Record<string, number>>>({});
+  const [myReactions, setMyReactions] = useState<Record<string, string[]>>({});
 
   const [candidateUsers, setCandidateUsers] = useState<Profile[]>([]);
 
