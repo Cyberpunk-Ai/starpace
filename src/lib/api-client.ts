@@ -92,11 +92,25 @@ export async function getPosts(
   }
   const { data, error } = await query;
   if (error) throw error;
-  const posts = (data ?? []).map((row: any) => rowToPost(row));
+  let posts = (data ?? []).map((row: any) => rowToPost(row));
+
+  // "For you" blends freshness with engagement so the tab differs from "Latest".
+  if (options.filter === "foryou" && !options.userId && !options.tag) {
+    const now = Date.now();
+    posts = [...posts].sort((a, b) => score(b) - score(a));
+    function score(p: Post) {
+      const ageHours = Math.max(1, (now - new Date(p.created_at).getTime()) / 3_600_000);
+      const engagement =
+        (p.like_count ?? 0) * 3 + (p.comment_count ?? 0) * 4 + (p.repost_count ?? 0) * 5 + (p.view_count ?? 0) * 0.1;
+      return (engagement + 5) / Math.pow(ageHours, 0.6);
+    }
+  }
+
   await hydrateAuthors(posts.map((p: Post) => p.user_id));
   await hydrateEngagement(posts);
   return posts;
 }
+
 
 /** Posts the signed-in user has bookmarked, fetched by join instead of client filtering. */
 export async function getBookmarkedPosts(limit = 50): Promise<Post[]> {
