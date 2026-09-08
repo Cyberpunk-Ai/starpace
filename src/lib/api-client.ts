@@ -539,17 +539,45 @@ export async function createSpace(input: { title: string; topic: string; gradien
   return data as any;
 }
 
+/** Keep the room's listener count in step with who is actually inside. */
+async function syncSpaceListeners(spaceId: string) {
+  const { count } = await db
+    .from("space_participants")
+    .select("user_id", { count: "exact", head: true })
+    .eq("space_id", spaceId);
+  await db.from("spaces").update({ listeners: count ?? 0 }).eq("id", spaceId);
+  emitRealtime("space:listeners", { spaceId, listeners: count ?? 0 });
+  return count ?? 0;
+}
+
 export async function joinSpace(spaceId: string) {
   await db.from("space_participants").upsert({ space_id: spaceId, user_id: me(), role: "listener" });
   emitRealtime("space:joined", { spaceId, userId: me() });
+  await syncSpaceListeners(spaceId);
   return { ok: true };
 }
 
 export async function leaveSpace(spaceId: string) {
   await db.from("space_participants").delete().eq("space_id", spaceId).eq("user_id", me());
   emitRealtime("space:left", { spaceId, userId: me() });
+  await syncSpaceListeners(spaceId);
   return { ok: true };
 }
+
+/** Host-only: close the room for everyone and mark it as a recording. */
+export async function endSpace(spaceId: string) {
+  const { error } = await db
+    .from("spaces")
+    .update({ live: false, recorded: true })
+    .eq("id", spaceId)
+    .eq("host_id", me());
+  if (error) throw error;
+  await db.from("space_participants").delete().eq("space_id", spaceId);
+  await db.from("spaces").update({ listeners: 0 }).eq("id", spaceId);
+  emitRealtime("space:ended", { spaceId });
+  return { ok: true };
+}
+
 
 export async function toggleHandRaised(spaceId: string, raised: boolean) {
   await db
