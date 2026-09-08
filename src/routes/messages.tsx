@@ -554,17 +554,45 @@ function MessagesPage() {
   }
 
   const handleToggleReaction = (msgId: string, emoji: string) => {
+    const alreadyMine = (myReactions[msgId] || []).includes(emoji);
+    const turnOn = !alreadyMine;
+
+    // Optimistic update
     setReactions((prev) => {
       const msgMap = { ...(prev[msgId] || {}) };
-      if (msgMap[emoji]) {
-        msgMap[emoji] = msgMap[emoji] - 1;
-        if (msgMap[emoji] <= 0) delete msgMap[emoji];
-      } else {
-        msgMap[emoji] = (msgMap[emoji] || 0) + 1;
-      }
+      const next = (msgMap[emoji] ?? 0) + (turnOn ? 1 : -1);
+      if (next <= 0) delete msgMap[emoji];
+      else msgMap[emoji] = next;
       return { ...prev, [msgId]: msgMap };
     });
+    setMyReactions((prev) => {
+      const list = prev[msgId] || [];
+      return {
+        ...prev,
+        [msgId]: turnOn ? [...list, emoji] : list.filter((e) => e !== emoji),
+      };
+    });
+
+    void toggleMessageReaction(msgId, emoji, turnOn).catch(() => {
+      // Roll back on failure
+      setReactions((prev) => {
+        const msgMap = { ...(prev[msgId] || {}) };
+        const next = (msgMap[emoji] ?? 0) + (turnOn ? -1 : 1);
+        if (next <= 0) delete msgMap[emoji];
+        else msgMap[emoji] = next;
+        return { ...prev, [msgId]: msgMap };
+      });
+      setMyReactions((prev) => {
+        const list = prev[msgId] || [];
+        return {
+          ...prev,
+          [msgId]: turnOn ? list.filter((e) => e !== emoji) : [...list, emoji],
+        };
+      });
+      toast.error("Couldn't save that reaction");
+    });
   };
+
 
   const handleStartEdit = (msg: Message) => {
     setEditingMsgId(msg.id);
