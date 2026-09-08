@@ -521,8 +521,18 @@ function MessagesPage() {
           return { ...prev, [event.messageId]: msgMap };
         });
       }
+
+      if (event.type === "message:edited" && event.id) {
+        setAll((prev) =>
+          prev.map((m) => (m.id === event.id ? { ...m, body: event.body, is_edited: true } : m))
+        );
+      }
+
+      if (event.type === "message:deleted" && event.id) {
+        setAll((prev) => prev.filter((m) => m.id !== event.id));
+      }
     },
-    ["message", "new_message", "message:reaction"]
+    ["message", "new_message", "message:reaction", "message:edited", "message:deleted"]
   );
 
   async function send() {
