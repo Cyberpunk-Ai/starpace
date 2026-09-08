@@ -43,6 +43,7 @@ function SpacesSkeleton() {
 import { getProfile } from "@/lib/profile-service";
 import type { Space } from "@/lib/types";
 import { getSpaces, createSpace } from "@/lib/api-client";
+import { useRealtime } from "@/lib/realtime";
 import { usePlan, openUpgradeModal } from "@/lib/plan-state";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -249,6 +250,28 @@ function SpacesPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Keep the list in sync as rooms open, fill up and close
+  useRealtime(
+    (event: any) => {
+      if (event.type === "space:created" && event.space?.id) {
+        setAllSpaces((prev) =>
+          prev.some((s) => s.id === event.space.id) ? prev : [event.space, ...prev],
+        );
+      } else if (event.type === "space:ended" && event.spaceId) {
+        setAllSpaces((prev) =>
+          prev.map((s) => (s.id === event.spaceId ? { ...s, live: false, listeners: 0 } : s)),
+        );
+        setActiveSpace((cur) => (cur && cur.id === event.spaceId ? null : cur));
+      } else if (event.type === "space:listeners" && event.spaceId) {
+        setAllSpaces((prev) =>
+          prev.map((s) => (s.id === event.spaceId ? { ...s, listeners: event.listeners } : s)),
+        );
+      }
+    },
+    ["space:created", "space:ended", "space:listeners"],
+  );
+
+
   // Auto-open space if spaceId is provided in URL
   useEffect(() => {
     if (search.spaceId && allSpaces.length > 0) {
@@ -282,6 +305,8 @@ function SpacesPage() {
         title: titleDraft.trim(),
         topic: topicDraft,
         gradient: gradientDraft,
+        live: !isScheduled,
+        startsAt: isScheduled ? new Date(`${scheduledDate}T${scheduledTime}`).toISOString() : null,
       });
 
       const newSpace: Space = {

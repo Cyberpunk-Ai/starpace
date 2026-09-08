@@ -233,7 +233,7 @@ function FeedPage() {
     try {
       const filterKey = tab === "Following" ? "following" : tab === "Latest" ? "latest" : "foryou";
       const livePosts = await getPosts({ filter: filterKey });
-      if (Array.isArray(livePosts) && livePosts.length > 0) {
+      if (Array.isArray(livePosts)) {
         setPosts(livePosts);
         setPendingIncomingPosts([]);
       }

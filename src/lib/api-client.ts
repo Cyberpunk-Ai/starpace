@@ -92,11 +92,25 @@ export async function getPosts(
   }
   const { data, error } = await query;
   if (error) throw error;
-  const posts = (data ?? []).map((row: any) => rowToPost(row));
+  let posts = (data ?? []).map((row: any) => rowToPost(row));
+
+  // "For you" blends freshness with engagement so the tab differs from "Latest".
+  if (options.filter === "foryou" && !options.userId && !options.tag) {
+    const now = Date.now();
+    posts = [...posts].sort((a, b) => score(b) - score(a));
+    function score(p: Post) {
+      const ageHours = Math.max(1, (now - new Date(p.created_at).getTime()) / 3_600_000);
+      const engagement =
+        (p.likeCount ?? 0) * 3 + (p.commentCount ?? 0) * 4 + (p.repostCount ?? 0) * 5 + (p.viewCount ?? 0) * 0.1;
+      return (engagement + 5) / Math.pow(ageHours, 0.6);
+    }
+  }
+
   await hydrateAuthors(posts.map((p: Post) => p.user_id));
   await hydrateEngagement(posts);
   return posts;
 }
+
 
 /** Posts the signed-in user has bookmarked, fetched by join instead of client filtering. */
 export async function getBookmarkedPosts(limit = 50): Promise<Post[]> {
@@ -517,9 +531,16 @@ export async function getSpaces(): Promise<{ spaces: Space[] }> {
   return { spaces: (data ?? []).map(rowToSpace) };
 }
 
-/** Start a new live audio room hosted by the signed-in profile. */
-export async function createSpace(input: { title: string; topic: string; gradient?: string }) {
+/** Start a new live audio room, or schedule one for later, hosted by the signed-in profile. */
+export async function createSpace(input: {
+  title: string;
+  topic: string;
+  gradient?: string;
+  live?: boolean;
+  startsAt?: string | null;
+}) {
   const id = `space_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  const isLive = input.live !== false;
   const { data, error } = await db
     .from("spaces")
     .insert({
@@ -528,28 +549,61 @@ export async function createSpace(input: { title: string; topic: string; gradien
       topic: input.topic,
       host_id: me(),
       gradient: input.gradient ?? "from-brand to-brand-pink",
-      live: true,
-      listeners: 1,
+      live: isLive,
+      listeners: isLive ? 1 : 0,
+      starts_at: input.startsAt ?? null,
     })
     .select("*")
     .single();
   if (error) throw error;
-  await db.from("space_participants").insert({ space_id: id, user_id: me(), role: "host" });
-  emitRealtime("space:created", data);
-  return data as any;
+  if (isLive) {
+    await db.from("space_participants").insert({ space_id: id, user_id: me(), role: "host" });
+  }
+  const space = rowToSpace(data);
+  emitRealtime("space:created", { space });
+  return { space };
+}
+
+
+/** Keep the room's listener count in step with who is actually inside. */
+async function syncSpaceListeners(spaceId: string) {
+  const { count } = await db
+    .from("space_participants")
+    .select("user_id", { count: "exact", head: true })
+    .eq("space_id", spaceId);
+  await db.from("spaces").update({ listeners: count ?? 0 }).eq("id", spaceId);
+  emitRealtime("space:listeners", { spaceId, listeners: count ?? 0 });
+  return count ?? 0;
 }
 
 export async function joinSpace(spaceId: string) {
   await db.from("space_participants").upsert({ space_id: spaceId, user_id: me(), role: "listener" });
   emitRealtime("space:joined", { spaceId, userId: me() });
+  await syncSpaceListeners(spaceId);
   return { ok: true };
 }
 
 export async function leaveSpace(spaceId: string) {
   await db.from("space_participants").delete().eq("space_id", spaceId).eq("user_id", me());
   emitRealtime("space:left", { spaceId, userId: me() });
+  await syncSpaceListeners(spaceId);
   return { ok: true };
 }
+
+/** Host-only: close the room for everyone and mark it as a recording. */
+export async function endSpace(spaceId: string) {
+  const { error } = await db
+    .from("spaces")
+    .update({ live: false, recorded: true })
+    .eq("id", spaceId)
+    .eq("host_id", me());
+  if (error) throw error;
+  await db.from("space_participants").delete().eq("space_id", spaceId);
+  await db.from("spaces").update({ listeners: 0 }).eq("id", spaceId);
+  emitRealtime("space:ended", { spaceId });
+  return { ok: true };
+}
+
 
 export async function toggleHandRaised(spaceId: string, raised: boolean) {
   await db

@@ -35,6 +35,7 @@ import {
   toggleSpeaking,
   toggleHandRaised,
   sendSpaceMessage,
+  endSpace,
   summarizeSpaceAI,
 } from "@/lib/api-client";
 import { useRealtime } from "@/lib/realtime";
@@ -851,7 +852,12 @@ function SpaceRoomModalContent({ space, onClose }: { space: Space; onClose: () =
                 </button>
               ) : (
                 <button
-                  onClick={() => {
+                  onClick={async () => {
+                    try {
+                      await leaveSpace(space.id);
+                    } catch {
+                      /* leaving is best effort */
+                    }
                     onClose();
                     toast.info("You left the Space");
                   }}
@@ -894,9 +900,14 @@ function SpaceRoomModalContent({ space, onClose }: { space: Space; onClose: () =
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   setShowEndConfirmation(false);
-                  toast.success("Space ended. Recording & summary saved.");
+                  try {
+                    await endSpace(space.id);
+                    toast.success("Space ended for everyone");
+                  } catch {
+                    toast.error("Couldn't end the Space");
+                  }
                   onClose();
                 }}
                 className="flex-1 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white py-2.5 text-xs font-bold shadow-soft cursor-pointer"
