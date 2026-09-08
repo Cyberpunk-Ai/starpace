@@ -282,6 +282,8 @@ function SpacesPage() {
         title: titleDraft.trim(),
         topic: topicDraft,
         gradient: gradientDraft,
+        live: !isScheduled,
+        startsAt: isScheduled ? new Date(`${scheduledDate}T${scheduledTime}`).toISOString() : null,
       });
 
       const newSpace: Space = {
