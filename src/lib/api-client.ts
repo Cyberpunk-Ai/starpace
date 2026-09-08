@@ -101,7 +101,7 @@ export async function getPosts(
     function score(p: Post) {
       const ageHours = Math.max(1, (now - new Date(p.created_at).getTime()) / 3_600_000);
       const engagement =
-        (p.like_count ?? 0) * 3 + (p.comment_count ?? 0) * 4 + (p.repost_count ?? 0) * 5 + (p.view_count ?? 0) * 0.1;
+        (p.likeCount ?? 0) * 3 + (p.commentCount ?? 0) * 4 + (p.repostCount ?? 0) * 5 + (p.viewCount ?? 0) * 0.1;
       return (engagement + 5) / Math.pow(ageHours, 0.6);
     }
   }
