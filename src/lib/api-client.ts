@@ -777,7 +777,25 @@ export async function toggleMessageReaction(messageId: string, emoji: string, on
   return { messageId, emoji, on };
 }
 
+export async function editMessage(messageId: string, body: string) {
+  const { data, error } = await db
+    .from("messages")
+    .update({ body })
+    .eq("id", messageId)
+    .eq("sender_id", me())
+    .select("*")
+    .maybeSingle();
+  if (error) throw error;
+  emitRealtime("message:edited", { id: messageId, body });
+  return data as Message | null;
+}
 
+export async function deleteMessage(messageId: string) {
+  const { error } = await db.from("messages").delete().eq("id", messageId).eq("sender_id", me());
+  if (error) throw error;
+  emitRealtime("message:deleted", { id: messageId });
+  return { id: messageId };
+}
 
 
 export async function getNotifications(): Promise<Notification[]> {
