@@ -422,6 +422,12 @@ function MessagesPage() {
         }
       })
       .catch((err) => console.warn("Messages load:", err));
+    getMessageReactions(activeId)
+      .then(({ counts, mine }) => {
+        setReactions(counts);
+        setMyReactions(mine);
+      })
+      .catch(() => {});
   }, [activeId]);
 
   const active = (activeId ? conversations.find((c) => c.id === activeId) : conversations[0]) || null;
