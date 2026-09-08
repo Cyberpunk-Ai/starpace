@@ -510,8 +510,19 @@ function MessagesPage() {
           )
         );
       }
+
+      if (event.type === "message:reaction" && event.messageId && event.emoji) {
+        if (event.userId === currentUserId) return;
+        setReactions((prev) => {
+          const msgMap = { ...(prev[event.messageId] || {}) };
+          const next = (msgMap[event.emoji] ?? 0) + (event.on ? 1 : -1);
+          if (next <= 0) delete msgMap[event.emoji];
+          else msgMap[event.emoji] = next;
+          return { ...prev, [event.messageId]: msgMap };
+        });
+      }
     },
-    ["message", "new_message"]
+    ["message", "new_message", "message:reaction"]
   );
 
   async function send() {
