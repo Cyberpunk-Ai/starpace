@@ -33,7 +33,7 @@ import { TipModal } from "@/components/social/TipModal";
 import { timeAgo } from "@/lib/formatters";
 import { currentUserId, currentUser, getProfile, profileRegistry } from "@/lib/profile-service";
 import type { Conversation, Message, Profile } from "@/lib/types";
-import { getConversations, getMessages, sendMessage, uploadMedia, getUserProfile, getUsers } from "@/lib/api-client";
+import { getConversations, getMessages, sendMessage, uploadMedia, getUserProfile, getUsers, getMessageReactions, toggleMessageReaction, editMessage, deleteMessage } from "@/lib/api-client";
 import { decrementUnreadMessages } from "@/lib/unread-state";
 import { useRealtime } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
@@ -314,10 +314,9 @@ function MessagesPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
-  // Message reactions state: Record<msgId, Record<emoji, number>>
-  const [reactions, setReactions] = useState<Record<string, Record<string, number>>>({
-    m_sample_1: { "❤️": 2, "🔥": 1 },
-  });
+  // Message reactions loaded from the backend: Record<msgId, Record<emoji, count>>
+  const [reactions, setReactions] = useState<Record<string, Record<string, number>>>({});
+  const [myReactions, setMyReactions] = useState<Record<string, string[]>>({});
 
   const [candidateUsers, setCandidateUsers] = useState<Profile[]>([]);
 
@@ -423,6 +422,12 @@ function MessagesPage() {
         }
       })
       .catch((err) => console.warn("Messages load:", err));
+    getMessageReactions(activeId)
+      .then(({ counts, mine }) => {
+        setReactions(counts);
+        setMyReactions(mine);
+      })
+      .catch(() => {});
   }, [activeId]);
 
   const active = (activeId ? conversations.find((c) => c.id === activeId) : conversations[0]) || null;
@@ -505,8 +510,29 @@ function MessagesPage() {
           )
         );
       }
+
+      if (event.type === "message:reaction" && event.messageId && event.emoji) {
+        if (event.userId === currentUserId) return;
+        setReactions((prev) => {
+          const msgMap = { ...(prev[event.messageId] || {}) };
+          const next = (msgMap[event.emoji] ?? 0) + (event.on ? 1 : -1);
+          if (next <= 0) delete msgMap[event.emoji];
+          else msgMap[event.emoji] = next;
+          return { ...prev, [event.messageId]: msgMap };
+        });
+      }
+
+      if (event.type === "message:edited" && event.id) {
+        setAll((prev) =>
+          prev.map((m) => (m.id === event.id ? { ...m, body: event.body, is_edited: true } : m))
+        );
+      }
+
+      if (event.type === "message:deleted" && event.id) {
+        setAll((prev) => prev.filter((m) => m.id !== event.id));
+      }
     },
-    ["message", "new_message"]
+    ["message", "new_message", "message:reaction", "message:edited", "message:deleted"]
   );
 
   async function send() {
@@ -555,17 +581,45 @@ function MessagesPage() {
   }
 
   const handleToggleReaction = (msgId: string, emoji: string) => {
+    const alreadyMine = (myReactions[msgId] || []).includes(emoji);
+    const turnOn = !alreadyMine;
+
+    // Optimistic update
     setReactions((prev) => {
       const msgMap = { ...(prev[msgId] || {}) };
-      if (msgMap[emoji]) {
-        msgMap[emoji] = msgMap[emoji] - 1;
-        if (msgMap[emoji] <= 0) delete msgMap[emoji];
-      } else {
-        msgMap[emoji] = (msgMap[emoji] || 0) + 1;
-      }
+      const next = (msgMap[emoji] ?? 0) + (turnOn ? 1 : -1);
+      if (next <= 0) delete msgMap[emoji];
+      else msgMap[emoji] = next;
       return { ...prev, [msgId]: msgMap };
     });
+    setMyReactions((prev) => {
+      const list = prev[msgId] || [];
+      return {
+        ...prev,
+        [msgId]: turnOn ? [...list, emoji] : list.filter((e) => e !== emoji),
+      };
+    });
+
+    void toggleMessageReaction(msgId, emoji, turnOn).catch(() => {
+      // Roll back on failure
+      setReactions((prev) => {
+        const msgMap = { ...(prev[msgId] || {}) };
+        const next = (msgMap[emoji] ?? 0) + (turnOn ? -1 : 1);
+        if (next <= 0) delete msgMap[emoji];
+        else msgMap[emoji] = next;
+        return { ...prev, [msgId]: msgMap };
+      });
+      setMyReactions((prev) => {
+        const list = prev[msgId] || [];
+        return {
+          ...prev,
+          [msgId]: turnOn ? list.filter((e) => e !== emoji) : [...list, emoji],
+        };
+      });
+      toast.error("Couldn't save that reaction");
+    });
   };
+
 
   const handleStartEdit = (msg: Message) => {
     setEditingMsgId(msg.id);
@@ -573,29 +627,33 @@ function MessagesPage() {
   };
 
   const handleSaveEdit = (msgId: string) => {
-    if (!editDraft.trim()) return;
+    const body = editDraft.trim();
+    if (!body) return;
+    const original = all.find((m) => m.id === msgId);
     setAll((prev) =>
-      prev.map((m) =>
-        m.id === msgId ? { ...m, body: editDraft.trim(), is_edited: true } : m
-      )
+      prev.map((m) => (m.id === msgId ? { ...m, body, is_edited: true } : m))
     );
     setEditingMsgId(null);
     setEditDraft("");
-    toast.success("Message edited");
+    void editMessage(msgId, body)
+      .then(() => toast.success("Message edited"))
+      .catch(() => {
+        if (original) setAll((prev) => prev.map((m) => (m.id === msgId ? original : m)));
+        toast.error("Couldn't edit that message");
+      });
   };
 
   const handleDeleteMessage = (msgId: string) => {
     const targetMsg = all.find((m) => m.id === msgId);
     setAll((prev) => prev.filter((m) => m.id !== msgId));
-    toast.success("Message deleted", {
-      action: targetMsg
-        ? {
-            label: "Undo",
-            onClick: () => setAll((prev) => [...prev, targetMsg]),
-          }
-        : undefined,
-    });
+    void deleteMessage(msgId)
+      .then(() => toast.success("Message deleted"))
+      .catch(() => {
+        if (targetMsg) setAll((prev) => [...prev, targetMsg]);
+        toast.error("Couldn't delete that message");
+      });
   };
+
 
   const startVoiceRecording = async () => {
     try {
@@ -1064,7 +1122,12 @@ function MessagesPage() {
                                 key={emoji}
                                 type="button"
                                 onClick={() => handleToggleReaction(m.id, emoji)}
-                                className="cursor-pointer text-[11px] bg-background/80 dark:bg-card/90 backdrop-blur-xs px-2 py-0.5 rounded-full shadow-xs border border-border/40 hover:scale-105 transition-transform flex items-center gap-1 text-foreground"
+                                className={cn(
+                                  "cursor-pointer text-[11px] backdrop-blur-xs px-2 py-0.5 rounded-full shadow-xs border hover:scale-105 transition-transform flex items-center gap-1 text-foreground",
+                                  (myReactions[m.id] || []).includes(emoji)
+                                    ? "bg-brand/15 border-brand/50"
+                                    : "bg-background/80 dark:bg-card/90 border-border/40",
+                                )}
                               >
                                 <span>{emoji}</span>
                                 {count > 1 && <span className="font-bold text-[10px] text-muted-foreground">{count}</span>}

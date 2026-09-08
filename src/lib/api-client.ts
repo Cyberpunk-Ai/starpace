@@ -730,6 +730,73 @@ export async function sendMessage(target: string, body: string, mediaUrl?: strin
   return { message: data as Message, conversationId };
 }
 
+/** Reaction counts keyed by message id, then emoji. */
+export type ReactionMap = Record<string, Record<string, number>>;
+
+export async function getMessageReactions(
+  conversationId: string,
+): Promise<{ counts: ReactionMap; mine: Record<string, string[]> }> {
+  const counts: ReactionMap = {};
+  const mine: Record<string, string[]> = {};
+  const { data: msgs } = await db
+    .from("messages")
+    .select("id")
+    .eq("conversation_id", conversationId);
+  const ids = (msgs ?? []).map((m: any) => m.id);
+  if (ids.length === 0) return { counts, mine };
+  const { data } = await db
+    .from("message_reactions")
+    .select("message_id, user_id, emoji")
+    .in("message_id", ids);
+  const userId = me();
+  for (const row of data ?? []) {
+    const bucket = (counts[row.message_id] ??= {});
+    bucket[row.emoji] = (bucket[row.emoji] ?? 0) + 1;
+    if (row.user_id === userId) (mine[row.message_id] ??= []).push(row.emoji);
+  }
+  return { counts, mine };
+}
+
+export async function toggleMessageReaction(messageId: string, emoji: string, on: boolean) {
+  const userId = me();
+  if (on) {
+    const { error } = await db
+      .from("message_reactions")
+      .insert({ message_id: messageId, user_id: userId, emoji });
+    if (error && error.code !== "23505") throw error;
+  } else {
+    const { error } = await db
+      .from("message_reactions")
+      .delete()
+      .eq("message_id", messageId)
+      .eq("user_id", userId)
+      .eq("emoji", emoji);
+    if (error) throw error;
+  }
+  emitRealtime("message:reaction", { messageId, emoji, on, userId });
+  return { messageId, emoji, on };
+}
+
+export async function editMessage(messageId: string, body: string) {
+  const { data, error } = await db
+    .from("messages")
+    .update({ body })
+    .eq("id", messageId)
+    .eq("sender_id", me())
+    .select("*")
+    .maybeSingle();
+  if (error) throw error;
+  emitRealtime("message:edited", { id: messageId, body });
+  return data as Message | null;
+}
+
+export async function deleteMessage(messageId: string) {
+  const { error } = await db.from("messages").delete().eq("id", messageId).eq("sender_id", me());
+  if (error) throw error;
+  emitRealtime("message:deleted", { id: messageId });
+  return { id: messageId };
+}
+
 
 export async function getNotifications(): Promise<Notification[]> {
   const { data } = await db
