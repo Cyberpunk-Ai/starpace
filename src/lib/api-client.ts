@@ -531,9 +531,16 @@ export async function getSpaces(): Promise<{ spaces: Space[] }> {
   return { spaces: (data ?? []).map(rowToSpace) };
 }
 
-/** Start a new live audio room hosted by the signed-in profile. */
-export async function createSpace(input: { title: string; topic: string; gradient?: string }) {
+/** Start a new live audio room, or schedule one for later, hosted by the signed-in profile. */
+export async function createSpace(input: {
+  title: string;
+  topic: string;
+  gradient?: string;
+  live?: boolean;
+  startsAt?: string | null;
+}) {
   const id = `space_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  const isLive = input.live !== false;
   const { data, error } = await db
     .from("spaces")
     .insert({
@@ -542,16 +549,21 @@ export async function createSpace(input: { title: string; topic: string; gradien
       topic: input.topic,
       host_id: me(),
       gradient: input.gradient ?? "from-brand to-brand-pink",
-      live: true,
-      listeners: 1,
+      live: isLive,
+      listeners: isLive ? 1 : 0,
+      starts_at: input.startsAt ?? null,
     })
     .select("*")
     .single();
   if (error) throw error;
-  await db.from("space_participants").insert({ space_id: id, user_id: me(), role: "host" });
-  emitRealtime("space:created", data);
-  return data as any;
+  if (isLive) {
+    await db.from("space_participants").insert({ space_id: id, user_id: me(), role: "host" });
+  }
+  const space = rowToSpace(data);
+  emitRealtime("space:created", { space });
+  return { space };
 }
+
 
 /** Keep the room's listener count in step with who is actually inside. */
 async function syncSpaceListeners(spaceId: string) {
