@@ -229,6 +229,9 @@ function MessagesPage() {
   const [activeId, setActiveId] = useState<string>("");
   const [all, setAll] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
+  const [typingIn, setTypingIn] = useState<Record<string, number>>({});
+  const lastTypingSentRef = useRef(0);
+
   const [query, setQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeCall, setActiveCall] = useState<{
@@ -531,9 +534,49 @@ function MessagesPage() {
       if (event.type === "message:deleted" && event.id) {
         setAll((prev) => prev.filter((m) => m.id !== event.id));
       }
+
+      if (event.type === "message:read" && event.conversationId && event.readerId !== currentUserId) {
+        setAll((prev) =>
+          prev.map((m) =>
+            m.conversation_id === event.conversationId && m.sender_id === currentUserId && !m.read_at
+              ? { ...m, read_at: event.at || new Date().toISOString() }
+              : m,
+          ),
+        );
+      }
+
+      if (event.type === "message:typing" && event.userId && event.userId !== currentUserId) {
+        setTypingIn((prev) => ({ ...prev, [event.conversationId]: Date.now() }));
+      }
     },
-    ["message", "new_message", "message:reaction", "message:edited", "message:deleted"]
+    ["message", "new_message", "message:reaction", "message:edited", "message:deleted", "message:read", "message:typing"]
   );
+
+  // Expire typing indicators a few seconds after the last keystroke.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTypingIn((prev) => {
+        const cutoff = Date.now() - 4000;
+        let changed = false;
+        const next: Record<string, number> = {};
+        for (const [key, at] of Object.entries(prev)) {
+          if (at > cutoff) next[key] = at;
+          else changed = true;
+        }
+        return changed ? next : prev;
+      });
+    }, 1500);
+    return () => clearInterval(timer);
+  }, []);
+
+  function notifyTyping() {
+    if (!activeId) return;
+    const now = Date.now();
+    if (now - lastTypingSentRef.current < 2000) return;
+    lastTypingSentRef.current = now;
+    emitRealtime("message:typing", { conversationId: activeId, userId: currentUserId });
+  }
+
 
   async function send() {
     const body = draft.trim();
