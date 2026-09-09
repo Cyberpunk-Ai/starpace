@@ -70,6 +70,24 @@ const DEFAULT_USERS_TO_START = [
   { id: "u_zane", username: "zane", display_name: "Zane Sterling", bio: "Motion designer" },
 ];
 
+/** Detects whether a message body is a media link we should render inline. */
+function attachmentKind(body: string): "image" | "video" | "audio" | null {
+  const value = (body || "").trim();
+  if (!value || /\s/.test(value)) {
+    if (!value.startsWith("data:")) return null;
+  }
+  if (value.startsWith("data:image")) return "image";
+  if (value.startsWith("data:video")) return "video";
+  if (value.startsWith("data:audio")) return "audio";
+  if (!value.startsWith("http") && !value.startsWith("/")) return null;
+  const path = value.split("?")[0].toLowerCase();
+  if (/\.(png|jpe?g|webp|gif|avif|svg)$/.test(path)) return "image";
+  if (/\.(mp4|webm|mov|m4v)$/.test(path)) return "video";
+  if (/\.(mp3|wav|ogg|m4a|aac)$/.test(path)) return "audio";
+  return null;
+}
+
+
 function VoiceNotePlayer({ body, isMine }: { body: string; isMine: boolean }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
