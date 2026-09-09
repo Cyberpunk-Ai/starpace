@@ -22,6 +22,7 @@ import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SpacesRouteImport } from './routes/spaces'
 import { Route as BillingCallbackRouteImport } from './routes/billing.callback'
+import { Route as ApiPublicMediaSplatRouteImport } from './routes/api/public/media/$'
 import { Route as ApiPublicPaystackWebhookRouteImport } from './routes/api/public/paystack/webhook'
 
 const IndexRoute = IndexRouteImport.update({
@@ -89,6 +90,11 @@ const BillingCallbackRoute = BillingCallbackRouteImport.update({
   path: '/billing/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicMediaSplatRoute = ApiPublicMediaSplatRouteImport.update({
+  id: '/api/public/media/$',
+  path: '/api/public/media/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicPaystackWebhookRoute =
   ApiPublicPaystackWebhookRouteImport.update({
     id: '/api/public/paystack/webhook',
@@ -110,6 +116,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/spaces': typeof SpacesRoute
   '/billing/callback': typeof BillingCallbackRoute
+  '/api/public/media/$': typeof ApiPublicMediaSplatRoute
   '/api/public/paystack/webhook': typeof ApiPublicPaystackWebhookRoute
 }
 export interface FileRoutesByTo {
@@ -126,6 +133,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/spaces': typeof SpacesRoute
   '/billing/callback': typeof BillingCallbackRoute
+  '/api/public/media/$': typeof ApiPublicMediaSplatRoute
   '/api/public/paystack/webhook': typeof ApiPublicPaystackWebhookRoute
 }
 export interface FileRoutesById {
@@ -143,6 +151,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/spaces': typeof SpacesRoute
   '/billing/callback': typeof BillingCallbackRoute
+  '/api/public/media/$': typeof ApiPublicMediaSplatRoute
   '/api/public/paystack/webhook': typeof ApiPublicPaystackWebhookRoute
 }
 export interface FileRouteTypes {
@@ -161,6 +170,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/spaces'
     | '/billing/callback'
+    | '/api/public/media/$'
     | '/api/public/paystack/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -177,6 +187,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/spaces'
     | '/billing/callback'
+    | '/api/public/media/$'
     | '/api/public/paystack/webhook'
   id:
     | '__root__'
@@ -193,6 +204,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/spaces'
     | '/billing/callback'
+    | '/api/public/media/$'
     | '/api/public/paystack/webhook'
   fileRoutesById: FileRoutesById
 }
@@ -210,6 +222,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SpacesRoute: typeof SpacesRoute
   BillingCallbackRoute: typeof BillingCallbackRoute
+  ApiPublicMediaSplatRoute: typeof ApiPublicMediaSplatRoute
   ApiPublicPaystackWebhookRoute: typeof ApiPublicPaystackWebhookRoute
 }
 
@@ -306,6 +319,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BillingCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/media/$': {
+      id: '/api/public/media/$'
+      path: '/api/public/media/$'
+      fullPath: '/api/public/media/$'
+      preLoaderRoute: typeof ApiPublicMediaSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/paystack/webhook': {
       id: '/api/public/paystack/webhook'
       path: '/api/public/paystack/webhook'
@@ -330,6 +350,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SpacesRoute: SpacesRoute,
   BillingCallbackRoute: BillingCallbackRoute,
+  ApiPublicMediaSplatRoute: ApiPublicMediaSplatRoute,
   ApiPublicPaystackWebhookRoute: ApiPublicPaystackWebhookRoute,
 }
 export const routeTree = rootRouteImport
