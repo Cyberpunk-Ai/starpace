@@ -497,13 +497,16 @@ export async function getFollowingIds(): Promise<string[]> {
 }
 
 export async function uploadMedia(file: File, folder: "avatars" | "posts" | "stories" | "media" | "messages" = "media") {
-  const ext = file.name.split(".").pop() || "bin";
-  const path = `${folder}/${me()}/${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from("media").upload(path, file, { upsert: true });
+  const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `${folder}/${me()}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await supabase.storage
+    .from("media")
+    .upload(path, file, { upsert: true, contentType: file.type || undefined });
   if (error) throw error;
-  const { data } = supabase.storage.from("media").getPublicUrl(path);
-  return { url: data.publicUrl, path };
+  // Bucket is private; serve through the public media proxy so links never expire.
+  return { url: `/api/public/media/${path}`, path };
 }
+
 
 /* ----------------------------------------------------------------- spaces */
 

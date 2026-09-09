@@ -111,22 +111,26 @@ export function Composer({
     if (!file) return;
 
     const isVideo = file.type.startsWith("video/");
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error("That file is larger than 50MB. Please choose a smaller one.");
+      e.target.value = "";
+      return;
+    }
     setUploadingImage(true);
     try {
       const res = await uploadMedia(file, "posts");
       setAttachedImage(res.url);
       setSelectedGradient(null);
       toast.success(isVideo ? "Video attached" : "Image attached");
-    } catch (err) {
-      console.warn("Upload fallback preview:", err);
-      const previewUrl = URL.createObjectURL(file);
-      setAttachedImage(previewUrl);
-      setSelectedGradient(null);
-      toast.success(isVideo ? "Video attached" : "Image attached");
+    } catch (err: any) {
+      console.error("Upload failed:", err);
+      toast.error(err?.message || "Upload failed. Please try again.");
     } finally {
       setUploadingImage(false);
+      e.target.value = "";
     }
   }
+
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
