@@ -742,14 +742,19 @@ export async function getMessages(conversationId: string): Promise<Message[]> {
     .select("*")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true });
-  await db
+  const { data: marked } = await db
     .from("messages")
     .update({ read_at: nowIso() })
     .eq("conversation_id", conversationId)
     .neq("sender_id", me())
-    .is("read_at", null);
+    .is("read_at", null)
+    .select("id");
+  if ((marked ?? []).length > 0) {
+    emitRealtime("message:read", { conversationId, readerId: me(), at: nowIso() });
+  }
   return (data ?? []) as Message[];
 }
+
 
 export async function getOrCreateConversation(participantId: string): Promise<string> {
   const userId = me();
