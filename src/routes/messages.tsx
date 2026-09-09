@@ -1262,14 +1262,33 @@ function MessagesPage() {
                   );
                 })}
 
-                {/* Seen status note under last message */}
-                {thread.length > 0 && thread[thread.length - 1].sender_id === currentUserId && (
-                  <div className="text-right pr-2">
-                    <span className="text-[10px] text-muted-foreground font-semibold flex items-center justify-end gap-1">
-                      <CheckCheck className="h-3 w-3 text-brand" /> Seen just now
+                {/* Live typing indicator from the other person */}
+                {typingIn[activeId] && (
+                  <div className="flex items-center gap-2 pl-1 animate-in fade-in">
+                    <Avatar name={partner.display_name} src={partner.avatar_url} className="h-6 w-6 text-[10px]" />
+                    <span className="flex items-center gap-1 rounded-full bg-foreground/5 px-3 py-2">
+                      {[0, 150, 300].map((delay) => (
+                        <span
+                          key={delay}
+                          className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce"
+                          style={{ animationDelay: `${delay}ms` }}
+                        />
+                      ))}
                     </span>
                   </div>
                 )}
+
+                {/* Read status under the last message you sent */}
+                {thread.length > 0 &&
+                  thread[thread.length - 1].sender_id === currentUserId &&
+                  thread[thread.length - 1].read_at && (
+                    <div className="text-right pr-2">
+                      <span className="text-[10px] text-muted-foreground font-semibold flex items-center justify-end gap-1">
+                        <CheckCheck className="h-3 w-3 text-brand" /> Seen
+                      </span>
+                    </div>
+                  )}
+
 
                 <div ref={endRef} />
               </div>
