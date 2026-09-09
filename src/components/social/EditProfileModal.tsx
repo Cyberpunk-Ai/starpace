@@ -39,14 +39,13 @@ export function EditProfileModal({ isOpen, onClose, initialProfile, onProfileUpd
       updateUserSession({ avatar_url: res.url });
       toast.success("Avatar image uploaded");
     } catch (err: any) {
-      console.warn("Upload fallback local URL:", err);
-      const url = URL.createObjectURL(file);
-      setForm((prev) => ({ ...prev, avatar_url: url }));
-      updateUserSession({ avatar_url: url });
-      toast.success("Avatar updated");
+      console.error("Avatar upload failed:", err);
+      toast.error(err?.message || "Could not upload image. Please try again.");
     } finally {
       setUploadingAvatar(false);
+      e.target.value = "";
     }
+
   }
 
   async function handleSubmit(e: React.FormEvent) {

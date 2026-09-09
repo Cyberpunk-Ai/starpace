@@ -226,11 +226,11 @@ function SettingsPage() {
       updateUserSession({ avatar_url: newAvatarUrl });
       toast.success("Profile photo updated!", { id: "avatar-upload" });
     } catch (err: any) {
-      console.warn("Avatar upload fallback:", err);
-      const localUrl = URL.createObjectURL(file);
-      setForm((prev) => ({ ...prev, avatar_url: localUrl }));
-      updateUserSession({ avatar_url: localUrl });
-      toast.success("Profile photo updated!", { id: "avatar-upload" });
+      console.error("Avatar upload failed:", err);
+      toast.error(err?.message || "Could not upload photo. Please try again.", { id: "avatar-upload" });
+    } finally {
+      e.target.value = "";
+
     } finally {
       setUploadingPhoto(false);
     }
