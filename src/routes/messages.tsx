@@ -1343,7 +1343,11 @@ function MessagesPage() {
                     </button>
                     <input
                       value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
+                      onChange={(e) => {
+                        setDraft(e.target.value);
+                        notifyTyping();
+                      }}
+
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey) {
                           e.preventDefault();
