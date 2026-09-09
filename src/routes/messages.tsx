@@ -789,19 +789,14 @@ function MessagesPage() {
         });
       }
     } catch (err: any) {
-      console.warn("Upload fallback local preview:", err);
-      const url = URL.createObjectURL(file);
-      const newMsg: Message = {
-        id: tempId,
-        conversation_id: activeId,
-        sender_id: currentUserId,
-        body: url,
-        created_at: new Date().toISOString(),
-      };
-      setAll((prev) => [...prev, newMsg]);
-      toast.success("Attachment added", { id: "msg-upload" });
+      console.error("Attachment upload failed:", err);
+      setAll((prev) => prev.filter((m) => m.id !== tempId));
+      toast.error(err?.message || "Could not send that attachment", { id: "msg-upload" });
+    } finally {
+      e.target.value = "";
     }
   }
+
 
   function startChatWithUser(user: { id: string; username: string; display_name: string }) {
     setShowNewMsgModal(false);

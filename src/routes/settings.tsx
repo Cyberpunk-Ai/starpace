@@ -226,14 +226,13 @@ function SettingsPage() {
       updateUserSession({ avatar_url: newAvatarUrl });
       toast.success("Profile photo updated!", { id: "avatar-upload" });
     } catch (err: any) {
-      console.warn("Avatar upload fallback:", err);
-      const localUrl = URL.createObjectURL(file);
-      setForm((prev) => ({ ...prev, avatar_url: localUrl }));
-      updateUserSession({ avatar_url: localUrl });
-      toast.success("Profile photo updated!", { id: "avatar-upload" });
+      console.error("Avatar upload failed:", err);
+      toast.error(err?.message || "Could not upload photo. Please try again.", { id: "avatar-upload" });
     } finally {
+      e.target.value = "";
       setUploadingPhoto(false);
     }
+
   }
 
   async function save() {
@@ -273,7 +272,7 @@ function SettingsPage() {
         <PageHeader title="Settings" subtitle="Tune Spaces to fit the way you work." />
 
         <div className="grid gap-5 md:grid-cols-[15rem_1fr]">
-          <Panel className="p-2 md:max-h-[calc(100vh-8.5rem)] md:overflow-y-auto custom-scrollbar">
+          <Panel className="min-w-0 p-2 md:max-h-[calc(100vh-8.5rem)] md:overflow-y-auto custom-scrollbar">
             <nav className="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible pb-1 md:pb-0 [scrollbar-width:none]">
               {sections.map((s) => {
                 const Icon = s.icon;
@@ -315,7 +314,7 @@ function SettingsPage() {
             </nav>
           </Panel>
 
-          <Panel className="animate-in fade-in slide-in-from-bottom-2 duration-300 md:max-h-[calc(100vh-8.5rem)] md:overflow-y-auto custom-scrollbar" key={active}>
+          <Panel className="min-w-0 animate-in fade-in slide-in-from-bottom-2 duration-300 md:max-h-[calc(100vh-8.5rem)] md:overflow-y-auto custom-scrollbar" key={active}>
             {active === "profile" && (
               <div className="space-y-4">
                 <div className="flex items-center gap-4">
