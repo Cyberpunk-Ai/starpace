@@ -230,10 +230,9 @@ function SettingsPage() {
       toast.error(err?.message || "Could not upload photo. Please try again.", { id: "avatar-upload" });
     } finally {
       e.target.value = "";
-
-    } finally {
       setUploadingPhoto(false);
     }
+
   }
 
   async function save() {
