@@ -1119,18 +1119,32 @@ function MessagesPage() {
                           <>
                             {m.body.includes("Voice Note") || m.body.includes("🎙️") ? (
                               <VoiceNotePlayer body={m.body} isMine={mine} />
-                            ) : m.body.startsWith("data:image") || m.body.startsWith("/uploads/") || (m.body.startsWith("http") && (m.body.includes(".png") || m.body.includes(".jpg") || m.body.includes(".webp") || m.body.includes(".jpeg") || m.body.includes("/uploads/"))) ? (
+                            ) : attachmentKind(m.body) === "image" ? (
                               <div className="overflow-hidden rounded-2xl max-w-xs my-1">
                                 <img
                                   src={m.body}
                                   alt="Attachment"
+                                  loading="lazy"
                                   className="max-h-60 w-full object-cover rounded-2xl cursor-pointer hover:opacity-95"
                                   onClick={() => window.open(m.body, "_blank")}
                                 />
                               </div>
+                            ) : attachmentKind(m.body) === "video" ? (
+                              <div className="overflow-hidden rounded-2xl max-w-xs my-1">
+                                <video
+                                  src={m.body}
+                                  controls
+                                  playsInline
+                                  preload="metadata"
+                                  className="max-h-60 w-full rounded-2xl bg-black"
+                                />
+                              </div>
+                            ) : attachmentKind(m.body) === "audio" ? (
+                              <audio src={m.body} controls preload="metadata" className="my-1 w-56 max-w-full" />
                             ) : (
                               <p className="whitespace-pre-wrap break-words">{m.body}</p>
                             )}
+
 
                             {/* Timestamp & Status footer */}
                             <div
@@ -1144,10 +1158,18 @@ function MessagesPage() {
                                 <span className="italic opacity-80">(edited)</span>
                               )}
                               {mine && (
-                                <span className="flex items-center gap-0.5 ml-1" title="Seen by recipient">
-                                  <CheckCheck className="h-3.5 w-3.5 text-white" />
+                                <span
+                                  className="flex items-center gap-0.5 ml-1"
+                                  title={m.read_at ? "Seen" : "Sent"}
+                                >
+                                  {m.read_at ? (
+                                    <CheckCheck className="h-3.5 w-3.5 text-white" />
+                                  ) : (
+                                    <Check className="h-3.5 w-3.5 text-white/70" />
+                                  )}
                                 </span>
                               )}
+
                             </div>
                           </>
                         )}
