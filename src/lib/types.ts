@@ -216,7 +216,10 @@ export interface Message {
   body: string;
   created_at: string;
   media_url?: string | null;
+  read_at?: string | null;
+  is_edited?: boolean;
 }
+
 
 export interface Conversation {
   id: string;

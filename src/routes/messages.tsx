@@ -35,7 +35,7 @@ import { currentUserId, currentUser, getProfile, profileRegistry } from "@/lib/p
 import type { Conversation, Message, Profile } from "@/lib/types";
 import { getConversations, getMessages, sendMessage, uploadMedia, getUserProfile, getUsers, getMessageReactions, toggleMessageReaction, editMessage, deleteMessage } from "@/lib/api-client";
 import { decrementUnreadMessages } from "@/lib/unread-state";
-import { useRealtime } from "@/lib/realtime";
+import { useRealtime, emitRealtime } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -69,6 +69,24 @@ const DEFAULT_USERS_TO_START = [
   { id: "u_maya", username: "maya", display_name: "Maya Lin", bio: "Product architect" },
   { id: "u_zane", username: "zane", display_name: "Zane Sterling", bio: "Motion designer" },
 ];
+
+/** Detects whether a message body is a media link we should render inline. */
+function attachmentKind(body: string): "image" | "video" | "audio" | null {
+  const value = (body || "").trim();
+  if (!value || /\s/.test(value)) {
+    if (!value.startsWith("data:")) return null;
+  }
+  if (value.startsWith("data:image")) return "image";
+  if (value.startsWith("data:video")) return "video";
+  if (value.startsWith("data:audio")) return "audio";
+  if (!value.startsWith("http") && !value.startsWith("/")) return null;
+  const path = value.split("?")[0].toLowerCase();
+  if (/\.(png|jpe?g|webp|gif|avif|svg)$/.test(path)) return "image";
+  if (/\.(mp4|webm|mov|m4v)$/.test(path)) return "video";
+  if (/\.(mp3|wav|ogg|m4a|aac)$/.test(path)) return "audio";
+  return null;
+}
+
 
 function VoiceNotePlayer({ body, isMine }: { body: string; isMine: boolean }) {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -229,6 +247,9 @@ function MessagesPage() {
   const [activeId, setActiveId] = useState<string>("");
   const [all, setAll] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
+  const [typingIn, setTypingIn] = useState<Record<string, number>>({});
+  const lastTypingSentRef = useRef(0);
+
   const [query, setQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeCall, setActiveCall] = useState<{
@@ -531,9 +552,49 @@ function MessagesPage() {
       if (event.type === "message:deleted" && event.id) {
         setAll((prev) => prev.filter((m) => m.id !== event.id));
       }
+
+      if (event.type === "message:read" && event.conversationId && event.readerId !== currentUserId) {
+        setAll((prev) =>
+          prev.map((m) =>
+            m.conversation_id === event.conversationId && m.sender_id === currentUserId && !m.read_at
+              ? { ...m, read_at: event.at || new Date().toISOString() }
+              : m,
+          ),
+        );
+      }
+
+      if (event.type === "message:typing" && event.userId && event.userId !== currentUserId) {
+        setTypingIn((prev) => ({ ...prev, [event.conversationId]: Date.now() }));
+      }
     },
-    ["message", "new_message", "message:reaction", "message:edited", "message:deleted"]
+    ["message", "new_message", "message:reaction", "message:edited", "message:deleted", "message:read", "message:typing"]
   );
+
+  // Expire typing indicators a few seconds after the last keystroke.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTypingIn((prev) => {
+        const cutoff = Date.now() - 4000;
+        let changed = false;
+        const next: Record<string, number> = {};
+        for (const [key, at] of Object.entries(prev)) {
+          if (at > cutoff) next[key] = at;
+          else changed = true;
+        }
+        return changed ? next : prev;
+      });
+    }, 1500);
+    return () => clearInterval(timer);
+  }, []);
+
+  function notifyTyping() {
+    if (!activeId) return;
+    const now = Date.now();
+    if (now - lastTypingSentRef.current < 2000) return;
+    lastTypingSentRef.current = now;
+    emitRealtime("message:typing", { conversationId: activeId, userId: currentUserId });
+  }
+
 
   async function send() {
     const body = draft.trim();
@@ -1076,18 +1137,32 @@ function MessagesPage() {
                           <>
                             {m.body.includes("Voice Note") || m.body.includes("🎙️") ? (
                               <VoiceNotePlayer body={m.body} isMine={mine} />
-                            ) : m.body.startsWith("data:image") || m.body.startsWith("/uploads/") || (m.body.startsWith("http") && (m.body.includes(".png") || m.body.includes(".jpg") || m.body.includes(".webp") || m.body.includes(".jpeg") || m.body.includes("/uploads/"))) ? (
+                            ) : attachmentKind(m.body) === "image" ? (
                               <div className="overflow-hidden rounded-2xl max-w-xs my-1">
                                 <img
                                   src={m.body}
                                   alt="Attachment"
+                                  loading="lazy"
                                   className="max-h-60 w-full object-cover rounded-2xl cursor-pointer hover:opacity-95"
                                   onClick={() => window.open(m.body, "_blank")}
                                 />
                               </div>
+                            ) : attachmentKind(m.body) === "video" ? (
+                              <div className="overflow-hidden rounded-2xl max-w-xs my-1">
+                                <video
+                                  src={m.body}
+                                  controls
+                                  playsInline
+                                  preload="metadata"
+                                  className="max-h-60 w-full rounded-2xl bg-black"
+                                />
+                              </div>
+                            ) : attachmentKind(m.body) === "audio" ? (
+                              <audio src={m.body} controls preload="metadata" className="my-1 w-56 max-w-full" />
                             ) : (
                               <p className="whitespace-pre-wrap break-words">{m.body}</p>
                             )}
+
 
                             {/* Timestamp & Status footer */}
                             <div
@@ -1101,10 +1176,18 @@ function MessagesPage() {
                                 <span className="italic opacity-80">(edited)</span>
                               )}
                               {mine && (
-                                <span className="flex items-center gap-0.5 ml-1" title="Seen by recipient">
-                                  <CheckCheck className="h-3.5 w-3.5 text-white" />
+                                <span
+                                  className="flex items-center gap-0.5 ml-1"
+                                  title={m.read_at ? "Seen" : "Sent"}
+                                >
+                                  {m.read_at ? (
+                                    <CheckCheck className="h-3.5 w-3.5 text-white" />
+                                  ) : (
+                                    <Check className="h-3.5 w-3.5 text-white/70" />
+                                  )}
                                 </span>
                               )}
+
                             </div>
                           </>
                         )}
@@ -1179,14 +1262,33 @@ function MessagesPage() {
                   );
                 })}
 
-                {/* Seen status note under last message */}
-                {thread.length > 0 && thread[thread.length - 1].sender_id === currentUserId && (
-                  <div className="text-right pr-2">
-                    <span className="text-[10px] text-muted-foreground font-semibold flex items-center justify-end gap-1">
-                      <CheckCheck className="h-3 w-3 text-brand" /> Seen just now
+                {/* Live typing indicator from the other person */}
+                {typingIn[activeId] && (
+                  <div className="flex items-center gap-2 pl-1 animate-in fade-in">
+                    <Avatar name={partner.display_name} src={partner.avatar_url} className="h-6 w-6 text-[10px]" />
+                    <span className="flex items-center gap-1 rounded-full bg-foreground/5 px-3 py-2">
+                      {[0, 150, 300].map((delay) => (
+                        <span
+                          key={delay}
+                          className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce"
+                          style={{ animationDelay: `${delay}ms` }}
+                        />
+                      ))}
                     </span>
                   </div>
                 )}
+
+                {/* Read status under the last message you sent */}
+                {thread.length > 0 &&
+                  thread[thread.length - 1].sender_id === currentUserId &&
+                  thread[thread.length - 1].read_at && (
+                    <div className="text-right pr-2">
+                      <span className="text-[10px] text-muted-foreground font-semibold flex items-center justify-end gap-1">
+                        <CheckCheck className="h-3 w-3 text-brand" /> Seen
+                      </span>
+                    </div>
+                  )}
+
 
                 <div ref={endRef} />
               </div>
@@ -1241,7 +1343,11 @@ function MessagesPage() {
                     </button>
                     <input
                       value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
+                      onChange={(e) => {
+                        setDraft(e.target.value);
+                        notifyTyping();
+                      }}
+
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey) {
                           e.preventDefault();
