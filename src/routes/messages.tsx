@@ -633,6 +633,46 @@ function MessagesPage() {
   }
 
 
+  /**
+   * Saves a message to the backend. Threads started in the UI only exist
+   * locally until the first message, so send to the person and adopt the real
+   * thread id the backend hands back.
+   */
+  async function persistMessage(body: string, tempId: string) {
+    const conv = conversations.find((c) => c.id === activeId);
+    const target = activeId.startsWith("c_") && conv ? conv.participant_id : activeId;
+    const res: any = await sendMessage(target, body);
+    const serverMsg = res?.message ?? res;
+    const realId: string = res?.conversationId ?? activeId;
+    const stale = activeId;
+
+    if (realId && realId !== stale) {
+      setConversations((prev) => prev.map((c) => (c.id === stale ? { ...c, id: realId } : c)));
+      setActiveId(realId);
+    }
+    setAll((prev) => {
+      const updated = prev.map((m) =>
+        m.id === tempId
+          ? { ...m, id: serverMsg?.id ?? m.id, conversation_id: realId, body: serverMsg?.body ?? m.body }
+          : m.conversation_id === stale
+            ? { ...m, conversation_id: realId }
+            : m,
+      );
+      const seen = new Set<string>();
+      return updated.filter((item) => {
+        if (seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      });
+    });
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === realId ? { ...c, preview: body, updated_at: new Date().toISOString() } : c,
+      ),
+    );
+    return serverMsg;
+  }
+
   async function send() {
     const body = draft.trim();
     if (!body || sending) return;
@@ -651,28 +691,12 @@ function MessagesPage() {
     setDraft("");
 
     try {
-      const res: any = await sendMessage(activeId, body);
-      const serverMsg = res?.message || res;
-      if (serverMsg?.id) {
-        setAll((prev) => {
-          const updated = prev.map((m) => (m.id === tempId ? { ...m, id: serverMsg.id } : m));
-          const seen = new Set<string>();
-          return updated.filter((item) => {
-            if (seen.has(item.id)) return false;
-            seen.add(item.id);
-            return true;
-          });
-        });
-      }
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === activeId
-            ? { ...c, preview: body, updated_at: new Date().toISOString() }
-            : c
-        )
-      );
-    } catch {
-      // Keep optimistic message
+      await persistMessage(body, tempId);
+    } catch (err: any) {
+      // Never pretend an unsent message was delivered.
+      setAll((prev) => prev.filter((m) => m.id !== tempId));
+      setDraft(body);
+      toast.error(err?.message || "Message could not be sent");
     } finally {
       setSending(false);
     }
