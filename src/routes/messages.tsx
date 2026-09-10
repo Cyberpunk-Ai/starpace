@@ -264,6 +264,7 @@ function MessagesPage() {
   const search = Route.useSearch();
   const targetUserParam = search.user || search.id;
 
+  const { user: authUser, loading: authLoading } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [convsLoading, setConvsLoading] = useState(true);
   const [activeId, setActiveId] = useState<string>("");
