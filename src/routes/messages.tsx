@@ -378,8 +378,9 @@ function MessagesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const now = useLiveNow();
 
-  // Load conversations from backend
+  // Load conversations from backend (only once we know who is signed in)
   useEffect(() => {
+    if (authLoading || !authUser?.id) return;
     setConvsLoading(true);
     getConversations()
       .then((data) => {
