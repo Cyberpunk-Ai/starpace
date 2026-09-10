@@ -884,19 +884,7 @@ function MessagesPage() {
         created_at: new Date().toISOString(),
       };
       setAll((prev) => [...prev, newMsg]);
-      const sendRes: any = await sendMessage(activeId, res.url);
-      const serverMsg = sendRes?.message || sendRes;
-      if (serverMsg?.id) {
-        setAll((prev) => {
-          const updated = prev.map((m) => (m.id === tempId ? { ...m, id: serverMsg.id } : m));
-          const seen = new Set<string>();
-          return updated.filter((item) => {
-            if (seen.has(item.id)) return false;
-            seen.add(item.id);
-            return true;
-          });
-        });
-      }
+      await persistMessage(res.url, tempId);
     } catch (err: any) {
       console.error("Attachment upload failed:", err);
       setAll((prev) => prev.filter((m) => m.id !== tempId));
