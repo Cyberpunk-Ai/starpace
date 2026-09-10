@@ -854,23 +854,10 @@ function MessagesPage() {
           toast.success("Voice note uploaded", { id: "voice-upload" });
 
           const realBody = `🎙️ Voice Note (${duration}s) [${res.url}]`;
-          const apiRes: any = await sendMessage(activeId, realBody);
-          const serverMsg = apiRes?.message || apiRes;
-          if (serverMsg?.id) {
-            setAll((prev) => {
-              const updated = prev.map((m) =>
-                m.id === tempId ? { ...m, id: serverMsg.id, body: realBody } : m
-              );
-              const seen = new Set<string>();
-              return updated.filter((item) => {
-                if (seen.has(item.id)) return false;
-                seen.add(item.id);
-                return true;
-              });
-            });
-          }
+          await persistMessage(realBody, tempId);
         } catch (err) {
           console.error("Voice note upload failed:", err);
+          setAll((prev) => prev.filter((m) => m.id !== tempId));
           toast.error("Failed to upload voice note", { id: "voice-upload" });
         }
         resolve();
