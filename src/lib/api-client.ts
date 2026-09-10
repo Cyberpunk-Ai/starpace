@@ -301,25 +301,21 @@ export async function recordPostImpression(postId: string) {
   const userId = me();
   const viewer = userId && userId !== "guest" ? userId : null;
   try {
-    if (viewer) {
-      const { data: seen } = await db
-        .from("post_impressions")
-        .select("id")
-        .eq("post_id", postId)
-        .eq("user_id", viewer)
-        .maybeSingle();
-      if (!seen) await db.from("post_impressions").insert({ post_id: postId, user_id: viewer });
-    } else {
-      await db.from("post_impressions").insert({ post_id: postId, user_id: null });
-    }
+    // A signed-in person counts once per post; the unique index enforces it.
+    const { error } = await db
+      .from("post_impressions")
+      .insert({ post_id: postId, user_id: viewer });
+    if (error && error.code !== "23505") throw error;
   } catch {
     /* impressions are best-effort */
   }
-  const { count } = await db
-    .from("post_impressions")
-    .select("id", { count: "exact", head: true })
-    .eq("post_id", postId);
-  const viewCount = count ?? 0;
+  // Impression rows are admin-only to read, so take the tallied count off the post.
+  const { data: postRow } = await db
+    .from("posts")
+    .select("view_count")
+    .eq("id", postId)
+    .maybeSingle();
+  const viewCount = postRow?.view_count ?? 0;
   emitRealtime("post_view_updated", { postId, viewCount });
   return { viewCount };
 }
