@@ -35,6 +35,7 @@ import { currentUserId, currentUser, getProfile, profileRegistry } from "@/lib/p
 import type { Conversation, Message, Profile } from "@/lib/types";
 import { getConversations, getMessages, sendMessage, uploadMedia, getUserProfile, getUsers, getMessageReactions, toggleMessageReaction, editMessage, deleteMessage } from "@/lib/api-client";
 import { decrementUnreadMessages } from "@/lib/unread-state";
+import { useAuth } from "@/lib/auth-state";
 import { useRealtime, emitRealtime } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
