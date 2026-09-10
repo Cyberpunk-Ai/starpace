@@ -441,7 +441,7 @@ function MessagesPage() {
       })
       .catch((err) => console.warn("Conversations load:", err))
       .finally(() => setConvsLoading(false));
-  }, [targetUserParam]);
+  }, [targetUserParam, authLoading, authUser?.id]);
 
   function selectConversation(id: string) {
     const conv = conversations.find((c) => c.id === id);
