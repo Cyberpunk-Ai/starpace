@@ -35,6 +35,7 @@ import { currentUserId, currentUser, getProfile, profileRegistry } from "@/lib/p
 import type { Conversation, Message, Profile } from "@/lib/types";
 import { getConversations, getMessages, sendMessage, uploadMedia, getUserProfile, getUsers, getMessageReactions, toggleMessageReaction, editMessage, deleteMessage } from "@/lib/api-client";
 import { decrementUnreadMessages } from "@/lib/unread-state";
+import { useAuth } from "@/lib/auth-state";
 import { useRealtime, emitRealtime } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -264,6 +265,7 @@ function MessagesPage() {
   const search = Route.useSearch();
   const targetUserParam = search.user || search.id;
 
+  const { user: authUser, loading: authLoading } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [convsLoading, setConvsLoading] = useState(true);
   const [activeId, setActiveId] = useState<string>("");
@@ -378,8 +380,9 @@ function MessagesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const now = useLiveNow();
 
-  // Load conversations from backend
+  // Load conversations from backend (only once we know who is signed in)
   useEffect(() => {
+    if (authLoading || !authUser?.id) return;
     setConvsLoading(true);
     getConversations()
       .then((data) => {
@@ -438,7 +441,7 @@ function MessagesPage() {
       })
       .catch((err) => console.warn("Conversations load:", err))
       .finally(() => setConvsLoading(false));
-  }, [targetUserParam]);
+  }, [targetUserParam, authLoading, authUser?.id]);
 
   function selectConversation(id: string) {
     const conv = conversations.find((c) => c.id === id);
@@ -454,15 +457,14 @@ function MessagesPage() {
 
   // Load messages for the active conversation
   useEffect(() => {
-    if (!activeId) return;
+    // Placeholder threads (not yet saved) have nothing to fetch.
+    if (!activeId || activeId.startsWith("c_")) return;
     getMessages(activeId)
       .then((msgs) => {
-        if (msgs && msgs.length > 0) {
-          setAll((prev) => {
-            const others = prev.filter((m) => m.conversation_id !== activeId);
-            return [...others, ...msgs];
-          });
-        }
+        setAll((prev) => {
+          const others = prev.filter((m) => m.conversation_id !== activeId);
+          return [...others, ...(msgs ?? [])];
+        });
       })
       .catch((err) => console.warn("Messages load:", err));
     getMessageReactions(activeId)
@@ -490,8 +492,10 @@ function MessagesPage() {
   // Realtime hook for incoming messages
   useRealtime(
     (event) => {
-      const msg = event.message || (event.type === "new_message" ? (event.data || (event.id ? event : null)) : null);
-      if ((event.type === "message" || event.type === "new_message") && msg) {
+      const isNewMessage =
+        event.type === "message" || event.type === "new_message" || event.type === "message:created";
+      const msg = event.message || event.data || (isNewMessage && event.id ? event : null);
+      if (isNewMessage && msg) {
         const msgBody = msg.body || msg.content || "";
         const msgSender = msg.sender_id || (partner ? partner.id : "");
         const msgConvId = msg.conversation_id || activeId;
@@ -545,13 +549,27 @@ function MessagesPage() {
           });
         });
 
-        setConversations((prev) =>
-          prev.map((c) =>
+        setConversations((prev) => {
+          const known = prev.some((c) => c.id === msgConvId);
+          if (!known) {
+            // A brand-new thread from someone else: pull it from the backend.
+            void getConversations()
+              .then((fresh) => setConversations(fresh))
+              .catch(() => {});
+            return prev;
+          }
+          return prev.map((c) =>
             c.id === msgConvId
-              ? { ...c, preview: msgBody || "Media attachment", updated_at: new Date().toISOString() }
-              : c
-          )
-        );
+              ? {
+                  ...c,
+                  preview: msgBody || "Media attachment",
+                  updated_at: new Date().toISOString(),
+                  unread:
+                    msgSender !== currentUserId && msgConvId !== activeId ? (c.unread ?? 0) + 1 : c.unread,
+                }
+              : c,
+          );
+        });
       }
 
       if (event.type === "message:reaction" && event.messageId && event.emoji) {
@@ -618,6 +636,46 @@ function MessagesPage() {
   }
 
 
+  /**
+   * Saves a message to the backend. Threads started in the UI only exist
+   * locally until the first message, so send to the person and adopt the real
+   * thread id the backend hands back.
+   */
+  async function persistMessage(body: string, tempId: string) {
+    const conv = conversations.find((c) => c.id === activeId);
+    const target = activeId.startsWith("c_") && conv ? conv.participant_id : activeId;
+    const res: any = await sendMessage(target, body);
+    const serverMsg = res?.message ?? res;
+    const realId: string = res?.conversationId ?? activeId;
+    const stale = activeId;
+
+    if (realId && realId !== stale) {
+      setConversations((prev) => prev.map((c) => (c.id === stale ? { ...c, id: realId } : c)));
+      setActiveId(realId);
+    }
+    setAll((prev) => {
+      const updated = prev.map((m) =>
+        m.id === tempId
+          ? { ...m, id: serverMsg?.id ?? m.id, conversation_id: realId, body: serverMsg?.body ?? m.body }
+          : m.conversation_id === stale
+            ? { ...m, conversation_id: realId }
+            : m,
+      );
+      const seen = new Set<string>();
+      return updated.filter((item) => {
+        if (seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      });
+    });
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === realId ? { ...c, preview: body, updated_at: new Date().toISOString() } : c,
+      ),
+    );
+    return serverMsg;
+  }
+
   async function send() {
     const body = draft.trim();
     if (!body || sending) return;
@@ -636,28 +694,12 @@ function MessagesPage() {
     setDraft("");
 
     try {
-      const res: any = await sendMessage(activeId, body);
-      const serverMsg = res?.message || res;
-      if (serverMsg?.id) {
-        setAll((prev) => {
-          const updated = prev.map((m) => (m.id === tempId ? { ...m, id: serverMsg.id } : m));
-          const seen = new Set<string>();
-          return updated.filter((item) => {
-            if (seen.has(item.id)) return false;
-            seen.add(item.id);
-            return true;
-          });
-        });
-      }
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === activeId
-            ? { ...c, preview: body, updated_at: new Date().toISOString() }
-            : c
-        )
-      );
-    } catch {
-      // Keep optimistic message
+      await persistMessage(body, tempId);
+    } catch (err: any) {
+      // Never pretend an unsent message was delivered.
+      setAll((prev) => prev.filter((m) => m.id !== tempId));
+      setDraft(body);
+      toast.error(err?.message || "Message could not be sent");
     } finally {
       setSending(false);
     }
@@ -815,23 +857,10 @@ function MessagesPage() {
           toast.success("Voice note uploaded", { id: "voice-upload" });
 
           const realBody = `🎙️ Voice Note (${duration}s) [${res.url}]`;
-          const apiRes: any = await sendMessage(activeId, realBody);
-          const serverMsg = apiRes?.message || apiRes;
-          if (serverMsg?.id) {
-            setAll((prev) => {
-              const updated = prev.map((m) =>
-                m.id === tempId ? { ...m, id: serverMsg.id, body: realBody } : m
-              );
-              const seen = new Set<string>();
-              return updated.filter((item) => {
-                if (seen.has(item.id)) return false;
-                seen.add(item.id);
-                return true;
-              });
-            });
-          }
+          await persistMessage(realBody, tempId);
         } catch (err) {
           console.error("Voice note upload failed:", err);
+          setAll((prev) => prev.filter((m) => m.id !== tempId));
           toast.error("Failed to upload voice note", { id: "voice-upload" });
         }
         resolve();
@@ -858,19 +887,7 @@ function MessagesPage() {
         created_at: new Date().toISOString(),
       };
       setAll((prev) => [...prev, newMsg]);
-      const sendRes: any = await sendMessage(activeId, res.url);
-      const serverMsg = sendRes?.message || sendRes;
-      if (serverMsg?.id) {
-        setAll((prev) => {
-          const updated = prev.map((m) => (m.id === tempId ? { ...m, id: serverMsg.id } : m));
-          const seen = new Set<string>();
-          return updated.filter((item) => {
-            if (seen.has(item.id)) return false;
-            seen.add(item.id);
-            return true;
-          });
-        });
-      }
+      await persistMessage(res.url, tempId);
     } catch (err: any) {
       console.error("Attachment upload failed:", err);
       setAll((prev) => prev.filter((m) => m.id !== tempId));
