@@ -225,6 +225,7 @@ export function useTheme() {
       const nextMode: ThemeMode = isCurrentlyDark ? "light" : "dark";
       const next = { ...prev, mode: nextMode };
       inMemoryTheme = next;
+      persistTheme(next);
       applyThemeToDOM(next);
       return next;
     });
