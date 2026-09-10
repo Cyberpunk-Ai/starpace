@@ -152,7 +152,13 @@ export function applyThemeToDOM(settings: ThemeSettings) {
 }
 
 export function useTheme() {
-  const [settings, setSettings] = useState<ThemeSettings>(getStoredThemeSettings);
+  // Start from the shared defaults so the server and first client render match,
+  // then adopt the saved choice right after hydration.
+  const [settings, setSettings] = useState<ThemeSettings>(() => ({ ...inMemoryTheme }));
+
+  useEffect(() => {
+    setSettings(getStoredThemeSettings());
+  }, []);
 
   useEffect(() => {
     applyThemeToDOM(settings);
@@ -199,6 +205,7 @@ export function useTheme() {
     setSettings((prev) => {
       const next = { ...prev, ...partial };
       inMemoryTheme = next;
+      persistTheme(next);
       applyThemeToDOM(next);
       return next;
     });
