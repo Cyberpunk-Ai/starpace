@@ -490,8 +490,10 @@ function MessagesPage() {
   // Realtime hook for incoming messages
   useRealtime(
     (event) => {
-      const msg = event.message || (event.type === "new_message" ? (event.data || (event.id ? event : null)) : null);
-      if ((event.type === "message" || event.type === "new_message") && msg) {
+      const isNewMessage =
+        event.type === "message" || event.type === "new_message" || event.type === "message:created";
+      const msg = event.message || event.data || (isNewMessage && event.id ? event : null);
+      if (isNewMessage && msg) {
         const msgBody = msg.body || msg.content || "";
         const msgSender = msg.sender_id || (partner ? partner.id : "");
         const msgConvId = msg.conversation_id || activeId;
