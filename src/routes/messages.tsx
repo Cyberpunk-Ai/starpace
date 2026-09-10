@@ -70,6 +70,28 @@ const DEFAULT_USERS_TO_START = [
   { id: "u_zane", username: "zane", display_name: "Zane Sterling", bio: "Motion designer" },
 ];
 
+/** Long messages collapse to a few lines with a "… more" toggle. */
+function MessageText({ body, isMine }: { body: string; isMine: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = body.length > 320 || body.split("\n").length > 6;
+  if (!isLong) return <p className="whitespace-pre-wrap break-words">{body}</p>;
+  return (
+    <div>
+      <p className={cn("whitespace-pre-wrap break-words", !expanded && "line-clamp-5")}>{body}</p>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className={cn(
+          "mt-1 text-[0.7rem] font-bold underline-offset-2 hover:underline",
+          isMine ? "text-white/90" : "text-brand",
+        )}
+      >
+        {expanded ? "Show less" : "… more"}
+      </button>
+    </div>
+  );
+}
+
 /** Detects whether a message body is a media link we should render inline. */
 function attachmentKind(body: string): "image" | "video" | "audio" | null {
   const value = (body || "").trim();
@@ -1160,7 +1182,7 @@ function MessagesPage() {
                             ) : attachmentKind(m.body) === "audio" ? (
                               <audio src={m.body} controls preload="metadata" className="my-1 w-56 max-w-full" />
                             ) : (
-                              <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                              <MessageText body={m.body} isMine={mine} />
                             )}
 
 

@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Sparkles,
@@ -1120,6 +1120,24 @@ function Footer() {
 /* ---------------------------------- page ----------------------------------- */
 
 function Index() {
+  const { isLoggedIn, loading } = useAuth();
+  const navigate = useNavigate();
+
+  // Signed-in people belong in the app, not on the marketing page.
+  useEffect(() => {
+    if (!loading && isLoggedIn) {
+      void navigate({ to: "/feed", replace: true });
+    }
+  }, [loading, isLoggedIn, navigate]);
+
+  if (loading || isLoggedIn) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <span className="h-8 w-8 animate-spin rounded-full border-2 border-brand border-t-transparent" />
+      </div>
+    );
+  }
+
   return (
     <div className="overflow-x-hidden bg-background text-foreground">
       <Nav />
