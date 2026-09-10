@@ -68,17 +68,49 @@ export interface ThemeSettings {
   largerText: boolean;
 }
 
-let inMemoryTheme: ThemeSettings = {
-  mode: "system",
+/** Light is the default look; people can switch and the choice sticks. */
+const DEFAULT_THEME: ThemeSettings = {
+  mode: "light",
   accent: "violet",
   reduceMotion: false,
   largerText: false,
 };
 
+let inMemoryTheme: ThemeSettings = { ...DEFAULT_THEME };
+
+function readPersistedTheme(): ThemeSettings {
+  if (typeof window === "undefined") return { ...DEFAULT_THEME };
+  try {
+    const mode = window.localStorage.getItem(THEME_STORAGE_KEY) as ThemeMode | null;
+    const accent = window.localStorage.getItem(ACCENT_STORAGE_KEY) as ThemeAccent | null;
+    return {
+      mode: mode === "light" || mode === "dark" || mode === "system" ? mode : DEFAULT_THEME.mode,
+      accent: accent && accent in ACCENT_PALETTES ? accent : DEFAULT_THEME.accent,
+      reduceMotion: window.localStorage.getItem(MOTION_STORAGE_KEY) === "1",
+      largerText: window.localStorage.getItem(TEXT_STORAGE_KEY) === "1",
+    };
+  } catch {
+    return { ...DEFAULT_THEME };
+  }
+}
+
+function persistTheme(settings: ThemeSettings) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, settings.mode);
+    window.localStorage.setItem(ACCENT_STORAGE_KEY, settings.accent);
+    window.localStorage.setItem(MOTION_STORAGE_KEY, settings.reduceMotion ? "1" : "0");
+    window.localStorage.setItem(TEXT_STORAGE_KEY, settings.largerText ? "1" : "0");
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 export function getStoredThemeSettings(): ThemeSettings {
   if (typeof window === "undefined") {
-    return inMemoryTheme;
+    return { ...DEFAULT_THEME };
   }
+  inMemoryTheme = readPersistedTheme();
   return { ...inMemoryTheme };
 }
 
