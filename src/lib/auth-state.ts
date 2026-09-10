@@ -99,6 +99,10 @@ export function useAuth() {
       void loadSessionProfile().finally(() => {
         if (active) setLoading(false);
       });
+    } else {
+      // Another component already kicked off the session load; don't hang here.
+      setLoading(false);
+      sync();
     }
 
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
