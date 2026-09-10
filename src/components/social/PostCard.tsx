@@ -378,26 +378,16 @@ function PostCardBase({
     const text = commentDraft.trim();
     try {
       const res = await addPostComment(post.id, text);
-      const newComment: Comment = res.comment || {
-        id: `c_${Date.now()}`,
-        user_id: currentUser.id,
-        content: text,
-        created_at: new Date().toISOString(),
-      };
-      setCommentsList((prev) => [...prev, newComment]);
+      const newComment = res.comment as Comment;
+      // The same comment also arrives through the realtime bridge, so only add
+      // it when it isn't already in the list.
+      setCommentsList((prev) =>
+        prev.some((c) => c.id === newComment.id) ? prev : [...prev, newComment],
+      );
       setCommentDraft("");
       toast.success("Comment added");
     } catch (err) {
-      // Fallback local addition
-      const localComment: Comment = {
-        id: `c_${Date.now()}`,
-        user_id: currentUser.id,
-        content: text,
-        created_at: new Date().toISOString(),
-      };
-      setCommentsList((prev) => [...prev, localComment]);
-      setCommentDraft("");
-      toast.success("Comment added");
+      toast.error(err instanceof Error ? err.message : "Could not add your comment");
     } finally {
       setSubmittingComment(false);
     }
