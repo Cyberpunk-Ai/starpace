@@ -547,13 +547,27 @@ function MessagesPage() {
           });
         });
 
-        setConversations((prev) =>
-          prev.map((c) =>
+        setConversations((prev) => {
+          const known = prev.some((c) => c.id === msgConvId);
+          if (!known) {
+            // A brand-new thread from someone else: pull it from the backend.
+            void getConversations()
+              .then((fresh) => setConversations(fresh))
+              .catch(() => {});
+            return prev;
+          }
+          return prev.map((c) =>
             c.id === msgConvId
-              ? { ...c, preview: msgBody || "Media attachment", updated_at: new Date().toISOString() }
-              : c
-          )
-        );
+              ? {
+                  ...c,
+                  preview: msgBody || "Media attachment",
+                  updated_at: new Date().toISOString(),
+                  unread:
+                    msgSender !== currentUserId && msgConvId !== activeId ? (c.unread ?? 0) + 1 : c.unread,
+                }
+              : c,
+          );
+        });
       }
 
       if (event.type === "message:reaction" && event.messageId && event.emoji) {
