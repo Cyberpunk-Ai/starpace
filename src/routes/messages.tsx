@@ -454,15 +454,14 @@ function MessagesPage() {
 
   // Load messages for the active conversation
   useEffect(() => {
-    if (!activeId) return;
+    // Placeholder threads (not yet saved) have nothing to fetch.
+    if (!activeId || activeId.startsWith("c_")) return;
     getMessages(activeId)
       .then((msgs) => {
-        if (msgs && msgs.length > 0) {
-          setAll((prev) => {
-            const others = prev.filter((m) => m.conversation_id !== activeId);
-            return [...others, ...msgs];
-          });
-        }
+        setAll((prev) => {
+          const others = prev.filter((m) => m.conversation_id !== activeId);
+          return [...others, ...(msgs ?? [])];
+        });
       })
       .catch((err) => console.warn("Messages load:", err));
     getMessageReactions(activeId)
