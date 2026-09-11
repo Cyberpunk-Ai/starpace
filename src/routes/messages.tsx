@@ -1121,27 +1121,53 @@ function MessagesPage() {
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto p-3 sm:p-4 [scrollbar-width:thin]">
+              <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3 sm:p-4 [scrollbar-width:thin]">
                 {thread.map((m, idx) => {
                   const mine = m.sender_id === currentUserId;
                   const isLatestMine = mine && idx === thread.length - 1;
                   const msgReactions = reactions[m.id] || {};
                   const isEditingThis = editingMsgId === m.id;
+                  const prev = idx > 0 ? thread[idx - 1] : null;
+                  const next = idx < thread.length - 1 ? thread[idx + 1] : null;
+                  const newDay = !prev || dayKey(prev.created_at) !== dayKey(m.created_at);
+                  // Group runs from the same person so only the last one is timestamped.
+                  const startsGroup = newDay || prev?.sender_id !== m.sender_id;
+                  const endsGroup =
+                    !next ||
+                    next.sender_id !== m.sender_id ||
+                    dayKey(next.created_at) !== dayKey(m.created_at);
 
                   return (
-                    <div
-                      key={m.id}
-                      className={cn(
-                        "group relative flex animate-in fade-in slide-in-from-bottom-2 duration-300 items-end gap-1.5",
-                        mine ? "justify-end" : "justify-start",
+                    <div key={m.id}>
+                      {newDay && (
+                        <div className="my-4 flex items-center gap-3">
+                          <span className="h-px flex-1 bg-border/60" />
+                          <span className="rounded-full bg-foreground/5 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                            {dayLabel(m.created_at)}
+                          </span>
+                          <span className="h-px flex-1 bg-border/60" />
+                        </div>
                       )}
-                    >
                       <div
                         className={cn(
-                          "max-w-[88%] sm:max-w-[78%] rounded-3xl px-3.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm leading-relaxed shadow-soft relative",
+                          "group relative flex items-end gap-1.5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:duration-200",
+                          startsGroup ? "mt-3" : "mt-0.5",
+                          mine ? "justify-end" : "justify-start",
+                        )}
+                      >
+                      <div
+                        className={cn(
+                          "relative max-w-[88%] rounded-3xl px-3.5 py-2 text-xs leading-relaxed shadow-soft transition-shadow sm:max-w-[72%] sm:px-4 sm:py-2.5 sm:text-sm",
                           mine
-                            ? "rounded-br-lg bg-gradient-to-r from-brand to-brand-pink text-white"
-                            : "rounded-bl-lg bg-foreground/5",
+                            ? "bg-gradient-to-br from-brand to-brand-pink text-white"
+                            : "bg-foreground/5",
+                          mine
+                            ? endsGroup
+                              ? "rounded-br-lg"
+                              : "rounded-br-3xl"
+                            : endsGroup
+                              ? "rounded-bl-lg"
+                              : "rounded-bl-3xl",
                         )}
                       >
                         {isEditingThis ? (
