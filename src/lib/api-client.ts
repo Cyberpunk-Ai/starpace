@@ -359,13 +359,10 @@ export async function recordPostImpression(postId: string) {
   const viewer = userId && userId !== "guest" ? userId : null;
   try {
     // A signed-in person counts once per post; the unique index enforces it.
-    // upsert + ignoreDuplicates keeps a repeat view quiet instead of erroring.
+    // A repeat view is rejected by the unique index; that is expected, not a bug.
     const { error } = await db
       .from("post_impressions")
-      .upsert({ post_id: postId, user_id: viewer }, {
-        onConflict: "post_id,user_id",
-        ignoreDuplicates: true,
-      });
+      .insert({ post_id: postId, user_id: viewer });
     if (error && error.code !== "23505") throw error;
   } catch {
     /* impressions are best-effort */
