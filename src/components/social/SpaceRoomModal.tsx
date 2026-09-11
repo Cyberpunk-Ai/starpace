@@ -40,6 +40,7 @@ import {
 } from "@/lib/api-client";
 import { useRealtime } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
+import { ClampText } from "@/components/social/ClampText";
 import { toast } from "sonner";
 
 interface SpaceRoomModalProps {
@@ -716,9 +717,9 @@ function SpaceRoomModalContent({ space, onClose }: { space: Space; onClose: () =
                               </span>
                             )}
                           </div>
-                          <p className={cn("text-xs mt-0.5 leading-relaxed", m.isTip ? "font-semibold text-foreground" : "text-foreground/90 bg-foreground/5 p-2 rounded-xl")}>
-                            {m.body}
-                          </p>
+                          <div className={cn("text-xs mt-0.5 leading-relaxed", m.isTip ? "font-semibold text-foreground" : "text-foreground/90 bg-foreground/5 p-2 rounded-xl")}>
+                            <ClampText text={m.body} lines={4} limit={240} />
+                          </div>
                         </div>
                       </div>
                     );

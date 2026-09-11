@@ -48,6 +48,7 @@ import { useRealtime } from "@/lib/realtime";
 import { usePlan } from "@/lib/plan-state";
 import { useAuth } from "@/lib/auth-state";
 import { cn } from "@/lib/utils";
+import { ClampText } from "@/components/social/ClampText";
 
 function renderContentWithLinks(text: string) {
   if (!text) return null;
@@ -830,7 +831,9 @@ function PostCardBase({
                       </Link>
                       <TimeAgo iso={c.created_at} className="text-[10px] text-muted-foreground" />
                     </div>
-                    <p className="mt-1 text-foreground/90 leading-relaxed">{renderContentWithLinks(c.content)}</p>
+                    <div className="mt-1 text-foreground/90 leading-relaxed">
+                      <ClampText text={c.content} lines={4} limit={240} render={renderContentWithLinks} />
+                    </div>
                   </div>
                 </div>
               );
