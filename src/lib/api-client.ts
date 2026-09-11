@@ -128,8 +128,45 @@ export async function getBookmarkedPosts(limit = 50): Promise<Post[]> {
   return posts;
 }
 
+/**
+ * Poll tallies live in the vote table, never on the post, so every viewer sees
+ * the true counts and only their own choice.
+ */
+async function hydratePolls(posts: Post[]) {
+  const withPolls = posts.filter((p) => p.poll && (p.poll as any).options?.length);
+  if (withPolls.length === 0) return;
+  const viewer = me();
+  const { data } = await db
+    .from("poll_votes")
+    .select("post_id, option_id, user_id")
+    .in(
+      "post_id",
+      withPolls.map((p) => p.id),
+    );
+  const rows = (data ?? []) as any[];
+  for (const post of withPolls) {
+    const votes = rows.filter((v) => v.post_id === post.id);
+    const counts = new Map<string, number>();
+    let mine: string | undefined;
+    for (const v of votes) {
+      counts.set(v.option_id, (counts.get(v.option_id) ?? 0) + 1);
+      if (viewer && v.user_id === viewer) mine = v.option_id;
+    }
+    const poll = post.poll as any;
+    poll.options = poll.options.map((o: any) => ({
+      ...o,
+      votes: counts.get(o.id) ?? 0,
+      votedByMe: mine === o.id,
+    }));
+    poll.totalVotes = votes.length;
+    poll.hasVoted = Boolean(mine);
+    poll.userVotedOptionId = mine;
+  }
+}
+
 /** Stamp each post with the signed-in user's like/repost/bookmark state. */
 async function hydrateEngagement(posts: Post[]) {
+  await hydratePolls(posts);
   const userId = me();
   if (!userId || userId === "guest" || posts.length === 0) return;
   const ids = posts.map((p) => p.id);
