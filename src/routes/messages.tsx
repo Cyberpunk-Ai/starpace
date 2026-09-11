@@ -71,6 +71,25 @@ const DEFAULT_USERS_TO_START = [
   { id: "u_zane", username: "zane", display_name: "Zane Sterling", bio: "Motion designer" },
 ];
 
+/** Calendar day of a message, used to break the thread into dated sections. */
+function dayKey(iso: string) {
+  return new Date(iso).toDateString();
+}
+
+function dayLabel(iso: string) {
+  const d = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date(today.getTime() - 86400000);
+  if (d.toDateString() === today.toDateString()) return "Today";
+  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    ...(d.getFullYear() === today.getFullYear() ? {} : { year: "numeric" }),
+  });
+}
+
 /** Long messages collapse to a few lines with a "… more" toggle. */
 function MessageText({ body, isMine }: { body: string; isMine: boolean }) {
   const [expanded, setExpanded] = useState(false);
