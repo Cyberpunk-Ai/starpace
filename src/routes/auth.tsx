@@ -8,6 +8,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/auth")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    email: typeof search['email'] === "string" ? (search['email'] as string) : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Sign In or Join — Spaces" },
@@ -27,8 +30,10 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
-  const [email, setEmail] = useState("");
+  const { email: prefillEmail } = Route.useSearch();
+  // Arriving from the landing page with an email means they meant to join.
+  const [mode, setMode] = useState<"signin" | "signup">(prefillEmail ? "signup" : "signin");
+  const [email, setEmail] = useState(prefillEmail ?? "");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
