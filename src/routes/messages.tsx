@@ -1248,11 +1248,12 @@ function MessagesPage() {
                             )}
 
 
-                            {/* Timestamp & Status footer */}
+                            {/* Timestamp & Status footer — only on the last of a run */}
                             <div
                               className={cn(
                                 "mt-1 flex items-center gap-1.5 text-[0.65rem]",
                                 mine ? "text-white/80 justify-end" : "text-muted-foreground",
+                                endsGroup ? "" : "hidden",
                               )}
                             >
                               <span>{timeAgo(m.created_at, now)}</span>
