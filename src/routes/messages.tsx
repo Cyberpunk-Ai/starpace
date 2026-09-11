@@ -71,6 +71,35 @@ const DEFAULT_USERS_TO_START = [
   { id: "u_zane", username: "zane", display_name: "Zane Sterling", bio: "Motion designer" },
 ];
 
+/** Calendar day of a message, used to break the thread into dated sections. */
+function dayKey(iso: string) {
+  return new Date(iso).toDateString();
+}
+
+function dayLabel(iso: string) {
+  const d = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date(today.getTime() - 86400000);
+  if (d.toDateString() === today.toDateString()) return "Today";
+  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    ...(d.getFullYear() === today.getFullYear() ? {} : { year: "numeric" }),
+  });
+}
+
+/** Attachments read as a friendly label in the chat list, never a raw link. */
+function previewLabel(preview: string) {
+  const kind = attachmentKind(preview);
+  if (kind === "image") return "📷 Photo";
+  if (kind === "video") return "🎬 Video";
+  if (kind === "audio") return "🎧 Audio";
+  if (/^https?:\/\/|^\/api\/public\/media\//.test(preview)) return "📎 Attachment";
+  return preview;
+}
+
 /** Long messages collapse to a few lines with a "… more" toggle. */
 function MessageText({ body, isMine }: { body: string; isMine: boolean }) {
   const [expanded, setExpanded] = useState(false);
@@ -1121,27 +1150,53 @@ function MessagesPage() {
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto p-3 sm:p-4 [scrollbar-width:thin]">
+              <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3 sm:p-4 [scrollbar-width:thin]">
                 {thread.map((m, idx) => {
                   const mine = m.sender_id === currentUserId;
                   const isLatestMine = mine && idx === thread.length - 1;
                   const msgReactions = reactions[m.id] || {};
                   const isEditingThis = editingMsgId === m.id;
+                  const prev = idx > 0 ? thread[idx - 1] : null;
+                  const next = idx < thread.length - 1 ? thread[idx + 1] : null;
+                  const newDay = !prev || dayKey(prev.created_at) !== dayKey(m.created_at);
+                  // Group runs from the same person so only the last one is timestamped.
+                  const startsGroup = newDay || prev?.sender_id !== m.sender_id;
+                  const endsGroup =
+                    !next ||
+                    next.sender_id !== m.sender_id ||
+                    dayKey(next.created_at) !== dayKey(m.created_at);
 
                   return (
-                    <div
-                      key={m.id}
-                      className={cn(
-                        "group relative flex animate-in fade-in slide-in-from-bottom-2 duration-300 items-end gap-1.5",
-                        mine ? "justify-end" : "justify-start",
+                    <div key={m.id}>
+                      {newDay && (
+                        <div className="my-4 flex items-center gap-3">
+                          <span className="h-px flex-1 bg-border/60" />
+                          <span className="rounded-full bg-foreground/5 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                            {dayLabel(m.created_at)}
+                          </span>
+                          <span className="h-px flex-1 bg-border/60" />
+                        </div>
                       )}
-                    >
                       <div
                         className={cn(
-                          "max-w-[88%] sm:max-w-[78%] rounded-3xl px-3.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm leading-relaxed shadow-soft relative",
+                          "group relative flex items-end gap-1.5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:duration-200",
+                          startsGroup ? "mt-3" : "mt-0.5",
+                          mine ? "justify-end" : "justify-start",
+                        )}
+                      >
+                      <div
+                        className={cn(
+                          "relative max-w-[88%] rounded-3xl px-3.5 py-2 text-xs leading-relaxed shadow-soft transition-shadow sm:max-w-[72%] sm:px-4 sm:py-2.5 sm:text-sm",
                           mine
-                            ? "rounded-br-lg bg-gradient-to-r from-brand to-brand-pink text-white"
-                            : "rounded-bl-lg bg-foreground/5",
+                            ? "bg-gradient-to-br from-brand to-brand-pink text-white"
+                            : "bg-foreground/5",
+                          mine
+                            ? endsGroup
+                              ? "rounded-br-lg"
+                              : "rounded-br-3xl"
+                            : endsGroup
+                              ? "rounded-bl-lg"
+                              : "rounded-bl-3xl",
                         )}
                       >
                         {isEditingThis ? (
@@ -1177,23 +1232,23 @@ function MessagesPage() {
                             {m.body.includes("Voice Note") || m.body.includes("🎙️") ? (
                               <VoiceNotePlayer body={m.body} isMine={mine} />
                             ) : attachmentKind(m.body) === "image" ? (
-                              <div className="overflow-hidden rounded-2xl max-w-xs my-1">
+                              <div className="my-1 max-w-[260px] overflow-hidden rounded-2xl border border-black/5 bg-black/5 shadow-soft">
                                 <img
                                   src={m.body}
                                   alt="Attachment"
                                   loading="lazy"
-                                  className="max-h-60 w-full object-cover rounded-2xl cursor-pointer hover:opacity-95"
+                                  className="max-h-64 w-full cursor-zoom-in object-cover transition-transform duration-300 hover:scale-[1.02]"
                                   onClick={() => window.open(m.body, "_blank")}
                                 />
                               </div>
                             ) : attachmentKind(m.body) === "video" ? (
-                              <div className="overflow-hidden rounded-2xl max-w-xs my-1">
+                              <div className="my-1 max-w-[260px] overflow-hidden rounded-2xl border border-black/5 shadow-soft">
                                 <video
                                   src={m.body}
                                   controls
                                   playsInline
                                   preload="metadata"
-                                  className="max-h-60 w-full rounded-2xl bg-black"
+                                  className="max-h-64 w-full bg-black"
                                 />
                               </div>
                             ) : attachmentKind(m.body) === "audio" ? (
@@ -1203,11 +1258,12 @@ function MessagesPage() {
                             )}
 
 
-                            {/* Timestamp & Status footer */}
+                            {/* Timestamp & Status footer — only on the last of a run */}
                             <div
                               className={cn(
                                 "mt-1 flex items-center gap-1.5 text-[0.65rem]",
                                 mine ? "text-white/80 justify-end" : "text-muted-foreground",
+                                endsGroup ? "" : "hidden",
                               )}
                             >
                               <span>{timeAgo(m.created_at, now)}</span>
@@ -1297,6 +1353,7 @@ function MessagesPage() {
                           )}
                         </div>
                       )}
+                      </div>
                     </div>
                   );
                 })}

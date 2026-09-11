@@ -128,8 +128,45 @@ export async function getBookmarkedPosts(limit = 50): Promise<Post[]> {
   return posts;
 }
 
+/**
+ * Poll tallies live in the vote table, never on the post, so every viewer sees
+ * the true counts and only their own choice.
+ */
+async function hydratePolls(posts: Post[]) {
+  const withPolls = posts.filter((p) => p.poll && (p.poll as any).options?.length);
+  if (withPolls.length === 0) return;
+  const viewer = me();
+  const { data } = await db
+    .from("poll_votes")
+    .select("post_id, option_id, user_id")
+    .in(
+      "post_id",
+      withPolls.map((p) => p.id),
+    );
+  const rows = (data ?? []) as any[];
+  for (const post of withPolls) {
+    const votes = rows.filter((v) => v.post_id === post.id);
+    const counts = new Map<string, number>();
+    let mine: string | undefined;
+    for (const v of votes) {
+      counts.set(v.option_id, (counts.get(v.option_id) ?? 0) + 1);
+      if (viewer && v.user_id === viewer) mine = v.option_id;
+    }
+    const poll = post.poll as any;
+    poll.options = poll.options.map((o: any) => ({
+      ...o,
+      votes: counts.get(o.id) ?? 0,
+      votedByMe: mine === o.id,
+    }));
+    poll.totalVotes = votes.length;
+    poll.hasVoted = Boolean(mine);
+    poll.userVotedOptionId = mine;
+  }
+}
+
 /** Stamp each post with the signed-in user's like/repost/bookmark state. */
 async function hydrateEngagement(posts: Post[]) {
+  await hydratePolls(posts);
   const userId = me();
   if (!userId || userId === "guest" || posts.length === 0) return;
   const ids = posts.map((p) => p.id);
@@ -267,6 +304,10 @@ export async function getPostComments(postId: string): Promise<PostComment[]> {
   return (data ?? []) as PostComment[];
 }
 
+/**
+ * One vote per person, stored as its own row. Tallies are always recounted from
+ * those rows so nobody inherits somebody else's choice.
+ */
 export async function votePoll(postId: string, optionId: string) {
   const userId = me();
   if (!userId || userId === "guest") throw new Error("Sign in to vote");
@@ -280,20 +321,36 @@ export async function votePoll(postId: string, optionId: string) {
   const { error: voteError } = await db
     .from("poll_votes")
     .insert({ post_id: postId, option_id: optionId, user_id: userId });
-  if (voteError) throw voteError;
-  const { data } = await db.from("posts").select("poll").eq("id", postId).maybeSingle();
-  const poll = data?.poll ?? null;
-  if (poll?.options) {
-    poll.options = poll.options.map((o: any) =>
-      o.id === optionId ? { ...o, votes: (o.votes ?? 0) + 1, votedByMe: true } : o,
-    );
-    poll.totalVotes = (poll.totalVotes ?? 0) + 1;
-    poll.hasVoted = true;
-    poll.userVotedOptionId = optionId;
-    await db.from("posts").update({ poll }).eq("id", postId);
+  if (voteError) {
+    // 23505 = the database rejected a second vote from the same person.
+    if ((voteError as any).code === "23505") throw new Error("You already voted in this poll");
+    throw voteError;
   }
-  emitRealtime("post:poll", { id: postId, poll });
-  emitRealtime("poll_updated", { postId, poll });
+
+  const { data: postRow } = await db.from("posts").select("poll").eq("id", postId).maybeSingle();
+  const poll = postRow?.poll ?? null;
+  if (!poll?.options) return { poll };
+
+  const { data: voteRows } = await db
+    .from("poll_votes")
+    .select("option_id, user_id")
+    .eq("post_id", postId);
+  const rows = (voteRows ?? []) as any[];
+  const counts = new Map<string, number>();
+  for (const v of rows) counts.set(v.option_id, (counts.get(v.option_id) ?? 0) + 1);
+
+  const tallies = poll.options.map((o: any) => ({ id: o.id, votes: counts.get(o.id) ?? 0 }));
+  poll.options = poll.options.map((o: any) => ({
+    ...o,
+    votes: counts.get(o.id) ?? 0,
+    votedByMe: o.id === optionId,
+  }));
+  poll.totalVotes = rows.length;
+  poll.hasVoted = true;
+  poll.userVotedOptionId = optionId;
+
+  // Everyone else gets the counts only — their own vote state stays theirs.
+  emitRealtime("poll_updated", { postId, tallies, totalVotes: rows.length });
   return { poll };
 }
 
@@ -302,6 +359,7 @@ export async function recordPostImpression(postId: string) {
   const viewer = userId && userId !== "guest" ? userId : null;
   try {
     // A signed-in person counts once per post; the unique index enforces it.
+    // A repeat view is rejected by the unique index; that is expected, not a bug.
     const { error } = await db
       .from("post_impressions")
       .insert({ post_id: postId, user_id: viewer });

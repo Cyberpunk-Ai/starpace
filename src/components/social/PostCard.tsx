@@ -48,6 +48,7 @@ import { useRealtime } from "@/lib/realtime";
 import { usePlan } from "@/lib/plan-state";
 import { useAuth } from "@/lib/auth-state";
 import { cn } from "@/lib/utils";
+import { ClampText } from "@/components/social/ClampText";
 
 function renderContentWithLinks(text: string) {
   if (!text) return null;
@@ -236,8 +237,19 @@ function PostCardBase({
     } else if (event.type === "post_view_updated" && event.postId === post.id && typeof event.viewCount === "number") {
       const newViews = event.viewCount;
       setState((s) => ({ ...s, views: newViews }));
-    } else if (event.type === "poll_updated" && event.postId === post.id && event.poll) {
-      setPoll(event.poll);
+    } else if (event.type === "poll_updated" && event.postId === post.id && event.tallies) {
+      // Merge other people's counts without touching this viewer's own choice.
+      setPoll((prev) => {
+        if (!prev) return prev;
+        const counts = new Map<string, number>(
+          (event.tallies as any[]).map((t) => [t.id, t.votes]),
+        );
+        return {
+          ...prev,
+          options: prev.options.map((o) => ({ ...o, votes: counts.get(o.id) ?? o.votes })),
+          totalVotes: typeof event.totalVotes === "number" ? event.totalVotes : prev.totalVotes,
+        };
+      });
     } else if (event.event === "new_comment" && event.data?.post_id === post.id) {
       setCommentsList((prev) => {
         if (prev.some((c) => c.id === event.data.id)) return prev;
@@ -819,7 +831,9 @@ function PostCardBase({
                       </Link>
                       <TimeAgo iso={c.created_at} className="text-[10px] text-muted-foreground" />
                     </div>
-                    <p className="mt-1 text-foreground/90 leading-relaxed">{renderContentWithLinks(c.content)}</p>
+                    <div className="mt-1 text-foreground/90 leading-relaxed">
+                      <ClampText text={c.content} lines={4} limit={240} render={renderContentWithLinks} />
+                    </div>
                   </div>
                 </div>
               );

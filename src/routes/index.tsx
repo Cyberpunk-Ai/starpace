@@ -1023,7 +1023,7 @@ function Pricing() {
 
 function Cta() {
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+  const navigate = useNavigate();
   return (
     <section id="cta" className="scroll-mt-24 px-6 py-32">
       <Reveal className="container mx-auto">
@@ -1036,34 +1036,31 @@ function Cta() {
             <p className="text-lg text-white/80">
               Join millions of creators and communities on Spaces. Free forever, upgrade anytime.
             </p>
-            {sent ? (
-              <p className="mx-auto flex max-w-md items-center justify-center gap-2 rounded-full bg-white/10 px-6 py-4 font-semibold text-white">
-                <Check className="h-5 w-5" /> You're on the list — welcome to Spaces!
-              </p>
-            ) : (
-              <form
-                className="mx-auto flex max-w-md flex-col gap-3 sm:flex-row"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (email.trim()) setSent(true);
-                }}
+            <form
+              className="mx-auto flex max-w-md flex-col gap-3 sm:flex-row"
+              onSubmit={(e) => {
+                e.preventDefault();
+                navigate({
+                  to: "/auth",
+                  search: email.trim() ? ({ email: email.trim() } as never) : undefined,
+                });
+              }}
+            >
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email"
+                className="h-14 flex-1 rounded-full bg-white/10 px-6 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-white/40"
+              />
+              <button
+                type="submit"
+                className="h-14 rounded-full bg-white px-8 font-bold text-violet-700 transition-transform hover:scale-[1.02] hover:bg-gray-100"
               >
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  className="h-14 flex-1 rounded-full bg-white/10 px-6 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-white/40"
-                />
-                <button
-                  type="submit"
-                  className="h-14 rounded-full bg-white px-8 font-bold text-violet-700 transition-colors hover:bg-gray-100"
-                >
-                  Get Started
-                </button>
-              </form>
-            )}
+                Create account
+              </button>
+            </form>
             <p className="text-sm text-white/60">No credit card required</p>
           </div>
         </div>
