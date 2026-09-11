@@ -304,6 +304,10 @@ export async function getPostComments(postId: string): Promise<PostComment[]> {
   return (data ?? []) as PostComment[];
 }
 
+/**
+ * One vote per person, stored as its own row. Tallies are always recounted from
+ * those rows so nobody inherits somebody else's choice.
+ */
 export async function votePoll(postId: string, optionId: string) {
   const userId = me();
   if (!userId || userId === "guest") throw new Error("Sign in to vote");
@@ -317,20 +321,36 @@ export async function votePoll(postId: string, optionId: string) {
   const { error: voteError } = await db
     .from("poll_votes")
     .insert({ post_id: postId, option_id: optionId, user_id: userId });
-  if (voteError) throw voteError;
-  const { data } = await db.from("posts").select("poll").eq("id", postId).maybeSingle();
-  const poll = data?.poll ?? null;
-  if (poll?.options) {
-    poll.options = poll.options.map((o: any) =>
-      o.id === optionId ? { ...o, votes: (o.votes ?? 0) + 1, votedByMe: true } : o,
-    );
-    poll.totalVotes = (poll.totalVotes ?? 0) + 1;
-    poll.hasVoted = true;
-    poll.userVotedOptionId = optionId;
-    await db.from("posts").update({ poll }).eq("id", postId);
+  if (voteError) {
+    // 23505 = the database rejected a second vote from the same person.
+    if ((voteError as any).code === "23505") throw new Error("You already voted in this poll");
+    throw voteError;
   }
-  emitRealtime("post:poll", { id: postId, poll });
-  emitRealtime("poll_updated", { postId, poll });
+
+  const { data: postRow } = await db.from("posts").select("poll").eq("id", postId).maybeSingle();
+  const poll = postRow?.poll ?? null;
+  if (!poll?.options) return { poll };
+
+  const { data: voteRows } = await db
+    .from("poll_votes")
+    .select("option_id, user_id")
+    .eq("post_id", postId);
+  const rows = (voteRows ?? []) as any[];
+  const counts = new Map<string, number>();
+  for (const v of rows) counts.set(v.option_id, (counts.get(v.option_id) ?? 0) + 1);
+
+  const tallies = poll.options.map((o: any) => ({ id: o.id, votes: counts.get(o.id) ?? 0 }));
+  poll.options = poll.options.map((o: any) => ({
+    ...o,
+    votes: counts.get(o.id) ?? 0,
+    votedByMe: o.id === optionId,
+  }));
+  poll.totalVotes = rows.length;
+  poll.hasVoted = true;
+  poll.userVotedOptionId = optionId;
+
+  // Everyone else gets the counts only — their own vote state stays theirs.
+  emitRealtime("poll_updated", { postId, tallies, totalVotes: rows.length });
   return { poll };
 }
 
