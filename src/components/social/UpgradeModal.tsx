@@ -24,9 +24,6 @@ export function UpgradeModal() {
   const [featureHint, setFeatureHint] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<"plus" | "pro">("plus");
   const [cycle, setCycle] = useState<BillingCycle>("annual");
-  const [promoCode, setPromoCode] = useState("");
-  const [appliedDiscount, setAppliedDiscount] = useState<number | null>(null);
-  const [promoError, setPromoError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
@@ -63,20 +60,7 @@ export function UpgradeModal() {
   const targetPlanDetails = PLAN_DETAILS[selectedPlan];
   const basePrice = cycle === "annual" ? targetPlanDetails.priceAnnual : targetPlanDetails.priceMonthly;
   const rawTotal = cycle === "annual" ? targetPlanDetails.annualBilledTotal : targetPlanDetails.priceMonthly;
-  const discountMultiplier = appliedDiscount ? (100 - appliedDiscount) / 100 : 1;
-  const finalTotal = (rawTotal * discountMultiplier).toFixed(2);
-
-  const handleApplyPromo = () => {
-    setPromoError(null);
-    const code = promoCode.trim().toUpperCase();
-    if (code === "CREATOR50" || code === "SPACES50" || code === "LUMEN50") {
-      setAppliedDiscount(50);
-    } else if (code === "VIP" || code === "EARLYACCESS") {
-      setAppliedDiscount(30);
-    } else {
-      setPromoError("Invalid code. Try 'CREATOR50' for 50% off");
-    }
-  };
+  const finalTotal = rawTotal.toFixed(2);
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -251,32 +235,6 @@ export function UpgradeModal() {
 
             {/* Checkout Form */}
             <form onSubmit={handleCheckout} className="mt-6 space-y-4">
-              {/* Promo Code Row */}
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    value={promoCode}
-                    onChange={(e) => setPromoCode(e.target.value)}
-                    placeholder="Promo code (e.g. CREATOR50)"
-                    className="w-full rounded-xl border border-border/60 bg-background px-3.5 py-2.5 text-xs uppercase placeholder:normal-case focus:border-brand focus:outline-none"
-                  />
-                  {appliedDiscount && (
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[0.65rem] font-extrabold text-emerald-500">
-                      {appliedDiscount}% OFF Applied
-                    </span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={handleApplyPromo}
-                  className="rounded-xl border border-border px-4 py-2.5 text-xs font-bold hover:bg-foreground/5 transition-colors"
-                >
-                  Apply
-                </button>
-              </div>
-              {promoError && <p className="text-[0.7rem] text-rose-500">{promoError}</p>}
-
               {/* Secure payment notice */}
               <div className="rounded-2xl border border-border/60 p-3.5 space-y-2 bg-background">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
