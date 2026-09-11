@@ -90,6 +90,16 @@ function dayLabel(iso: string) {
   });
 }
 
+/** Attachments read as a friendly label in the chat list, never a raw link. */
+function previewLabel(preview: string) {
+  const kind = attachmentKind(preview);
+  if (kind === "image") return "📷 Photo";
+  if (kind === "video") return "🎬 Video";
+  if (kind === "audio") return "🎧 Audio";
+  if (/^https?:\/\/|^\/api\/public\/media\//.test(preview)) return "📎 Attachment";
+  return preview;
+}
+
 /** Long messages collapse to a few lines with a "… more" toggle. */
 function MessageText({ body, isMine }: { body: string; isMine: boolean }) {
   const [expanded, setExpanded] = useState(false);
