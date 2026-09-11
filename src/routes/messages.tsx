@@ -1222,23 +1222,23 @@ function MessagesPage() {
                             {m.body.includes("Voice Note") || m.body.includes("🎙️") ? (
                               <VoiceNotePlayer body={m.body} isMine={mine} />
                             ) : attachmentKind(m.body) === "image" ? (
-                              <div className="overflow-hidden rounded-2xl max-w-xs my-1">
+                              <div className="my-1 max-w-[260px] overflow-hidden rounded-2xl border border-black/5 bg-black/5 shadow-soft">
                                 <img
                                   src={m.body}
                                   alt="Attachment"
                                   loading="lazy"
-                                  className="max-h-60 w-full object-cover rounded-2xl cursor-pointer hover:opacity-95"
+                                  className="max-h-64 w-full cursor-zoom-in object-cover transition-transform duration-300 hover:scale-[1.02]"
                                   onClick={() => window.open(m.body, "_blank")}
                                 />
                               </div>
                             ) : attachmentKind(m.body) === "video" ? (
-                              <div className="overflow-hidden rounded-2xl max-w-xs my-1">
+                              <div className="my-1 max-w-[260px] overflow-hidden rounded-2xl border border-black/5 shadow-soft">
                                 <video
                                   src={m.body}
                                   controls
                                   playsInline
                                   preload="metadata"
-                                  className="max-h-60 w-full rounded-2xl bg-black"
+                                  className="max-h-64 w-full bg-black"
                                 />
                               </div>
                             ) : attachmentKind(m.body) === "audio" ? (
