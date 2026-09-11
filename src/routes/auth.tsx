@@ -8,9 +8,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/auth")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    email: typeof search['email'] === "string" ? (search['email'] as string) : undefined,
-  }),
+  validateSearch: (search: Record<string, unknown>): { email?: string } =>
+    typeof search['email'] === "string" ? { email: search['email'] as string } : {},
   head: () => ({
     meta: [
       { title: "Sign In or Join — Spaces" },
